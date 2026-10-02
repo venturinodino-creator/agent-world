@@ -180,28 +180,48 @@ export function createScene(container) {
   }
 
   // Little workers shuttling between the buildings and each island's headquarters all day: out with a crate,
-  // back empty-handed. Instanced bodies, heads and crates.
+  // back empty-handed. Each has a body, head, hard hat, two walking legs and two swinging arms (instanced).
+  // Buildings that are working right now get extra helpers that run faster, so busy places look busy.
   function ambientBots(world) {
     const list = [], rnd = lcg(5), crateColors = [PALETTE.red, PALETTE.white, PALETTE.teal, PALETTE.yellow];
+    const VEST = [0xff9a3c, 0xdbeaff, 0xff5a5a, 0x9fcdf5, 0xffd23c, 0x41e0a0], HAT = [0xffd23c, 0xff9a3c, 0xff5a5a, 0x3b72f2, 0xf3f6ff];
+    const route = (isl, ax, az, sp, ph) => {
+      const dx = ax - isl.x, dz = az - isl.z, len = Math.hypot(dx, dz) || 1;
+      list.push({ isl: isl.name, ax, az, bx: isl.x + (dx / len) * 1.5, bz: isl.z + (dz / len) * 1.5, side: rnd() < 0.5 ? 1 : -1, sp, ph,
+        vest: VEST[Math.floor(rnd() * VEST.length)], hat: HAT[Math.floor(rnd() * HAT.length)], crate: crateColors[Math.floor(rnd() * 4)] });
+    };
     world.islands.forEach(isl => {
       if (isl.dormant) return;
       const tiles = tileOffsets(isl.rings).slice(1), n = Math.min(90, 12 + Math.round(isl.agentCount * 2.5));
       for (let i = 0; i < n; i++) {
-        const t = tiles[Math.floor(rnd() * tiles.length)], ax = isl.x + t.x + (rnd() - 0.5) * 0.5, az = isl.z + t.z + (rnd() - 0.5) * 0.5;
-        const dx = ax - isl.x, dz = az - isl.z, len = Math.hypot(dx, dz) || 1;
-        list.push({ isl: isl.name, ax, az, bx: isl.x + (dx / len) * 1.5, bz: isl.z + (dz / len) * 1.5, side: rnd() < 0.5 ? 1 : -1,
-          sp: 0.07 + rnd() * 0.07, ph: rnd() * 2, hue: rnd(), crate: crateColors[Math.floor(rnd() * 4)] });
+        const t = tiles[Math.floor(rnd() * tiles.length)];
+        route(isl, isl.x + t.x + (rnd() - 0.5) * 0.5, isl.z + t.z + (rnd() - 0.5) * 0.5, 0.07 + rnd() * 0.07, rnd() * 2);
       }
     });
+    for (const a of world.agents) {
+      if (a.status !== 'running') continue;
+      const isl = world.islands.find(i => i.name === a.island);
+      for (let k = 0; k < 3; k++) route(isl, a.pos.x + (rnd() - 0.5) * 0.4, a.pos.z + 0.7, 0.2 + rnd() * 0.08, rnd() * 2);
+    }
     if (!list.length) return;
-    const body = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.09, 0.2, 4, 8), new THREE.MeshStandardMaterial({ roughness: 0.5 }), list.length);
-    const head = new THREE.InstancedMesh(new THREE.SphereGeometry(0.115, 10, 8), new THREE.MeshStandardMaterial({ color: 0xf3f6ff, roughness: 0.5 }), list.length);
-    const crate = new THREE.InstancedMesh(new RoundedBoxGeometry(0.24, 0.24, 0.24, 2, 0.04), new THREE.MeshStandardMaterial({ roughness: 0.45 }), list.length);
+    const N = list.length, mat = () => new THREE.MeshStandardMaterial({ roughness: 0.5 }), white = () => new THREE.MeshStandardMaterial({ color: 0xf3f6ff, roughness: 0.5 });
+    const parts = {
+      body: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.085, 0.17, 3, 8), mat(), N),
+      head: new THREE.InstancedMesh(new THREE.SphereGeometry(0.105, 10, 8), white(), N),
+      hat: new THREE.InstancedMesh(new THREE.SphereGeometry(0.115, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2), mat(), N),
+      legs: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.032, 0.032, 0.24, 6), white(), N * 2),
+      arms: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.03, 0.12, 3, 6), mat(), N * 2),
+      crate: new THREE.InstancedMesh(new THREE.BoxGeometry(0.25, 0.25, 0.25), mat(), N),
+    };
     const c = new THREE.Color();
-    list.forEach((b, i) => { body.setColorAt(i, c.setHex(b.hue < 0.12 ? 0xff5a5a : b.hue < 0.2 ? 0xff9ec0 : b.hue < 0.55 ? 0xdbeaff : 0x9fcdf5)); crate.setColorAt(i, c.setHex(b.crate)); });
-    body.castShadow = head.castShadow = crate.castShadow = true;
-    S.root.add(body, head, crate);
-    S.bots = { list, body, head, crate, m: new THREE.Matrix4(), q: new THREE.Quaternion(), p: new THREE.Vector3(), one: new THREE.Vector3(1, 1, 1), hide: new THREE.Vector3(0.001, 0.001, 0.001) };
+    list.forEach((b, i) => {
+      parts.body.setColorAt(i, c.setHex(b.vest)); parts.hat.setColorAt(i, c.setHex(b.hat)); parts.crate.setColorAt(i, c.setHex(b.crate));
+      parts.arms.setColorAt(i * 2, c.setHex(b.vest)); parts.arms.setColorAt(i * 2 + 1, c.setHex(b.vest));
+    });
+    // only the body and crate cast shadows; the many thin parts would just cost frames
+    Object.entries(parts).forEach(([name, im]) => { im.castShadow = name === 'body' || name === 'crate'; S.root.add(im); });
+    S.bots = { list, parts, base: new THREE.Matrix4(), local: new THREE.Matrix4(), out: new THREE.Matrix4(), q: new THREE.Quaternion(), qs: new THREE.Quaternion(),
+      p: new THREE.Vector3(), one: new THREE.Vector3(1, 1, 1), hide: new THREE.Vector3(0.001, 0.001, 0.001), ax: new THREE.Vector3(1, 0, 0) };
   }
 
   function setWorld(world, { refit = false } = {}) {
@@ -251,12 +271,14 @@ export function createScene(container) {
       const carry = new THREE.Mesh(new RoundedBoxGeometry(0.2, 0.2, 0.2, 2, 0.04), new THREE.MeshStandardMaterial({ color: PALETTE.red, roughness: 0.45 }));
       carry.position.set(0, 0.8, 0); carry.visible = false; robot.add(carry);
       const sparks = a.status === 'running' ? Array.from({ length: 6 }, () => { const sp = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), new THREE.MeshBasicMaterial({ color: 0xfff1a8 })); root.add(sp); return sp; }) : [];
+      const halo = a.status === 'running' ? new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.04, 8, 32), new THREE.MeshBasicMaterial({ color: 0x7fe9ff, transparent: true })) : null;
+      if (halo) { halo.rotation.x = Math.PI / 2; root.add(halo); }
       const dx = a.pos.x - isl.x, dz = a.pos.z - isl.z, len = Math.hypot(dx, dz) || 1;
       const alarm = a.status === 'fail' ? symbolSprite('!', '#ff5a4a') : null, zs = a.status === 'asleep' ? [0, 1, 2].map(() => symbolSprite('z', '#d6defa')) : [];
       const icon = a.status === 'running' ? iconProto.clone() : null;
       [alarm, icon, ...zs].filter(Boolean).forEach(s => root.add(s));
       root.add(building, robot); S.pickables.push(building, robot);
-      S.agents.set(a.id, { agent: a, building, robot, carry, sparks, bx: a.pos.x, bz: a.pos.z + 0.7, ph, alarm, icon, zs, island: isl,
+      S.agents.set(a.id, { agent: a, building, robot, carry, sparks, halo, bx: a.pos.x, bz: a.pos.z + 0.7, ph, alarm, icon, zs, island: isl,
         hq: { x: isl.x + (dx / len) * 1.5, z: isl.z + (dz / len) * 1.5 } });
     }
 
@@ -292,6 +314,11 @@ export function createScene(container) {
     return { x: (v.x * 0.5 + 0.5) * S.size.w, y: (-v.y * 0.5 + 0.5) * S.size.h, visible: v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 };
   }
   const agentHead = id => { const r = S.agents.get(id); return r ? project(r.robot.position.x, 1.45, r.robot.position.z) : null; };
+  // The agents closest to what the camera is looking at, for name tags when zoomed in.
+  const nearAgents = (radius, limit) => [...S.agents.values()]
+    .map(r => ({ id: r.agent.id, d: Math.hypot(r.robot.position.x - controls.target.x, r.robot.position.z - controls.target.z) }))
+    .filter(r => r.d < radius).sort((a, b) => a.d - b.d).slice(0, limit).map(r => r.id);
+  const cameraDistance = () => camera.position.distanceTo(controls.target);
   const islandLabel = isl => project(isl.x, 3.6, isl.z);
 
   function focusAgent(id) {
@@ -348,6 +375,9 @@ export function createScene(container) {
       if (r.alarm) r.alarm.position.set(rx, 1.5 + Math.sin(t * 6) * 0.04, rz);
       if (r.icon) r.icon.position.set(rx, 1.6 + Math.sin(t * 3 + r.ph * 6) * 0.05, rz);
       r.zs.forEach((z, i) => { const k = ((t * 0.5 + i / 3 + r.ph) % 1); z.position.set(r.bx + 0.2 + k * 0.3, 0.95 + k * 0.5, r.bz); z.material.opacity = 1 - k; z.scale.setScalar(0.2 + k * 0.22); });
+      if (r.halo) {   // a pulsing ring on the ground shows who is working right now
+        const k = (t * 1.2 + r.ph) % 1; r.halo.position.set(rx, 0.2, rz); r.halo.scale.setScalar(0.8 + k * 0.9); r.halo.material.opacity = 0.9 * (1 - k);
+      }
       r.sparks.forEach((sp, i) => {   // a working agent throws sparks off its building
         const u = (t * 1.6 + i / 6 + r.ph) % 1, ang = i * 1.1 + r.ph * 6;
         sp.position.set(r.bx + Math.cos(ang) * 0.4 * u, 0.75 + u * 0.7, r.bz - 0.7 + Math.sin(ang) * 0.4 * u); sp.scale.setScalar(Math.max(0.01, 1 - u));
@@ -357,19 +387,33 @@ export function createScene(container) {
     for (const hq of S.hqs.values()) hq.mats.ring.emissiveIntensity = 1.0 + Math.max(0, 1 - (t - hq.last) / 0.7) * 1.8;
 
     if (S.bots) {
-      const { list, body, head, crate, m, q, p, one, hide } = S.bots;
+      const { list, parts, base, local, out, q, qs, p, one, hide, ax } = S.bots;
+      // a part placed relative to the worker: translate to its joint, swing about x, then offset to the part's centre
+      const put = (im, idx, x, y, z, swing, dy, scale = one) => {
+        qs.setFromAxisAngle(ax, swing); local.compose(p.set(x, y, z), qs, scale);
+        if (dy) local.multiply(out.makeTranslation(0, dy, 0));
+        im.setMatrixAt(idx, out.multiplyMatrices(base, local));
+      };
       list.forEach((b, i) => {
         const w = routeBot(b, t), x = b.ax + (b.bx - b.ax) * w.u, z = b.az + (b.bz - b.az) * w.u;
         const nx = -(b.bz - b.az), nz = b.bx - b.ax, nl = Math.hypot(nx, nz) || 1, sway = Math.sin(w.u * Math.PI) * 0.3 * b.side;
         const px = x + (nx / nl) * sway, pz = z + (nz / nl) * sway, dir = w.forward ? 1 : -1;
-        const bob = Math.abs(Math.sin(t * 9 + b.ph * 5)) * 0.035;
-        q.setFromEuler(eul.set(0, Math.atan2((b.bx - b.ax) * dir, (b.bz - b.az) * dir), Math.sin(t * 9 + b.ph * 5) * 0.12));
-        m.compose(p.set(px, 0.4 + bob, pz), q, one); body.setMatrixAt(i, m);
-        m.compose(p.set(px, 0.64 + bob, pz), q, one); head.setMatrixAt(i, m);
-        m.compose(p.set(px, 0.92 + bob, pz), q, w.carrying ? one : hide); crate.setMatrixAt(i, m);
+        const gait = t * 10 + b.ph * 5, bob = Math.abs(Math.sin(gait)) * 0.03;
+        q.setFromEuler(eul.set(0, Math.atan2((b.bx - b.ax) * dir, (b.bz - b.az) * dir), 0));
+        base.compose(p.set(px, 0.14 + bob, pz), q, one);
+        const swing = Math.sin(gait) * 0.7;
+        put(parts.body, i, 0, 0.38, 0, 0, 0);
+        put(parts.head, i, 0, 0.62, 0, 0, 0);
+        put(parts.hat, i, 0, 0.64, 0, 0, 0);
+        put(parts.legs, i * 2, -0.05, 0.25, 0, swing, -0.12);
+        put(parts.legs, i * 2 + 1, 0.05, 0.25, 0, -swing, -0.12);
+        const carry = w.carrying;       // arms hold the crate out in front, otherwise swing
+        put(parts.arms, i * 2, -0.13, 0.46, 0, carry ? -1.2 : -swing, -0.07);
+        put(parts.arms, i * 2 + 1, 0.13, 0.46, 0, carry ? -1.2 : swing, -0.07);
+        put(parts.crate, i, 0, 0.5, 0.19, 0, 0, carry ? one : hide);
         if (w.forward && w.u > 0.93) { const hq = S.hqs.get(b.isl); if (hq) hq.last = t; }
       });
-      body.instanceMatrix.needsUpdate = head.instanceMatrix.needsUpdate = crate.instanceMatrix.needsUpdate = true;
+      Object.values(parts).forEach(im => { im.instanceMatrix.needsUpdate = true; });
     }
 
     S.rocks.forEach(rk => { rk.position.y = rk.userData.y + Math.sin(t * 0.4 + rk.userData.ph) * 0.4; rk.rotation.y += 0.002 * rk.userData.spin; rk.rotation.x += 0.001 * rk.userData.spin; });
@@ -395,6 +439,6 @@ export function createScene(container) {
     renderer.render(scene, camera);
   }
 
-  return { setWorld, update, pick, project, agentHead, islandLabel, focusAgent, focusIsland, fit, zoom, setInset, hasAgent: id => S.agents.has(id),
+  return { setWorld, update, pick, project, agentHead, islandLabel, focusAgent, focusIsland, fit, zoom, setInset, nearAgents, cameraDistance, hasAgent: id => S.agents.has(id),
     element: renderer.domElement };
 }

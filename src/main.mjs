@@ -25,6 +25,8 @@ const state = { data: null, world: null, selectedAgent: null, selectedIsland: nu
 const ui = { papers: [], errands: [], hubGlow: 0 };
 const bubbles = new Map();       // agent id -> { el, from, until }
 const islandLabels = new Map();  // island name -> element
+const nameTags = new Map();      // agent id -> name tag shown when zoomed in
+const NEAR_DISTANCE = 26;        // camera distance under which name tags appear
 
 const LOOP_MS = 240e3;           // the last 24 hours replay in four minutes, then start over
 const MAX_PER_FRAME = 6;         // after a pause in the tab, don't flood the screen
@@ -150,6 +152,17 @@ function tick() {
     for (const [id, b] of bubbles) {
       if (t > b.until || !scene.hasAgent(id)) { b.el.remove(); bubbles.delete(id); continue; }
       place(b.el, scene.agentHead(id), -16); b.el.style.opacity = String(Math.max(0, Math.min(1, (t - b.from) * 5, (b.until - t) * 2.5)));
+    }
+    // zoomed in: a name tag over the agents nearest the middle of the view, so you can see who is doing what
+    const near = scene.cameraDistance() < NEAR_DISTANCE ? new Set(scene.nearAgents(11, 10)) : new Set();
+    for (const [id, tag] of nameTags) if (!near.has(id) || id === state.selectedAgent) { tag.remove(); nameTags.delete(id); }
+    for (const id of near) {
+      if (id === state.selectedAgent) continue;
+      const a = state.world.agents.find(x => x.id === id); if (!a) continue;
+      let tag = nameTags.get(id);
+      if (!tag) { tag = el('div', 'worklabel'); tag.append(el('span', `dot ${a.status}`), el('span', 'wn', a.name)); labels.append(tag); nameTags.set(id, tag); }
+      tag.classList.toggle('working', a.status === 'running');
+      place(tag, scene.agentHead(id), -4);
     }
     const h = state.hoverAgent && !bubbles.has(state.hoverAgent) ? state.world.agents.find(a => a.id === state.hoverAgent) : null;
     if (h) { hoverName.textContent = h.name; place(hoverName, scene.agentHead(h.id), -12); } else hoverName.style.display = 'none';

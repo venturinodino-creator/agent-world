@@ -24,6 +24,10 @@ header{display:flex;align-items:center;gap:10px;padding:7px 14px;background:var(
   font-size:12px;font-weight:600;box-shadow:0 4px 14px rgba(0,0,0,.3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bubble::after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;border-bottom:0;border-top-color:#fff}
 .bubble.fail{background:#ffe3df;color:#7a1a10} .bubble.fail::after{border-top-color:#ffe3df}
+.worklabel{position:absolute;transform:translate(-50%,-100%);display:flex;align-items:center;gap:6px;max-width:210px;padding:2px 9px 2px 7px;border-radius:99px;
+  background:rgba(23,24,29,.8);color:var(--txt);font-size:11px;font-weight:600;white-space:nowrap}
+.worklabel .wn{overflow:hidden;text-overflow:ellipsis}
+.worklabel.working{background:rgba(14,60,76,.92);box-shadow:0 0 0 1px var(--cyan)}
 .hovername{position:absolute;transform:translate(-50%,-100%);padding:3px 8px;border-radius:8px;background:rgba(23,24,29,.92);color:var(--txt);font-size:11px;white-space:nowrap}
 
 /* the vertical tool strip on the left */
