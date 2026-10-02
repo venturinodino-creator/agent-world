@@ -38,10 +38,28 @@ export function renderPanel(root, agent, onClose, now = Date.now(), actions = {}
 
   const bar = el('div', `bar ${agent.status}`); bar.append(el('i')); bar.firstChild.style.width = `${BAR[agent.status] ?? 0}%`;
 
+  // For the signed-in Admin, an agent that is not working gets an Activate button in place of the GitHub link
+  // (see activation.mjs); everyone else keeps the plain Open link.
+  const act = actions.activation, offer = act?.offer;
   const buttons = el('div', 'buttons'), url = safeUrl(agent.kind === 'workflow' ? d.latest?.url || agent.url : agent.url);
-  if (url) buttons.append(link('↗ Open', url, 'open'));
+  if (offer?.kind === 'activate') {
+    const run = el('button', 'open run', act.busy ? 'Starting…' : `▶ ${offer.label}`); run.type = 'button'; run.disabled = !!(act.busy || act.confirming);
+    run.onclick = () => act.onAsk?.(); buttons.append(run);
+  } else if (offer?.kind === 'pending') {
+    const wait = el('button', 'open run pending', offer.label); wait.type = 'button'; wait.disabled = true; buttons.append(wait);
+  } else if (offer?.kind === 'cowork') {
+    buttons.append(link('↗ ' + offer.label, offer.url, 'open'));
+  } else if (url) buttons.append(link('↗ Open', url, 'open'));
   const focus = el('button', 'ghost', '⌖ Focus'); focus.type = 'button'; focus.onclick = () => actions.focus?.();
   buttons.append(focus);
+  const extras = [];
+  if (offer?.kind === 'activate' && act.confirming) {
+    const box = el('div', 'confirm'), yes = el('button', 'open', 'Yes, start'), no = el('button', 'ghost', 'Cancel');
+    yes.type = no.type = 'button'; yes.onclick = () => act.onStart?.(); no.onclick = () => act.onCancel?.();
+    const row = el('div', 'row'); row.append(yes, no); box.append(el('p', '', offer.confirm), row); extras.push(box);
+  }
+  if (act?.error) extras.push(el('p', 'activateerr', act.error));
+  if (act?.runUrl && safeUrl(act.runUrl)) { const p = el('p', 'runlink'); p.append(link('View this run on GitHub ↗', act.runUrl)); extras.push(p); }
 
   const body = el('div', 'body');
   const sub = el('p', 'sub');
@@ -67,7 +85,7 @@ export function renderPanel(root, agent, onClose, now = Date.now(), actions = {}
     }
     body.append(list);
   }
-  root.append(top, bar, buttons, body);
+  root.append(top, bar, buttons, ...extras, body);
 }
 
 function stat(value, label) {

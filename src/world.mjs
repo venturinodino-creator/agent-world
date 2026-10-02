@@ -46,7 +46,7 @@ function agentsOf(r, localAgents, now) {
 }
 
 const localAgent = (a, repo, islandName) => ({ id: `${islandName}::${a.name}`, name: a.name, kind: 'local', status: LOCAL_STATUS[a.status] || 'asleep',
-  repo, url: null, details: { schedule: a.schedule || '', role: a.role || '', note: LOCAL_NOTE } });
+  repo, url: null, details: { schedule: a.schedule || '', role: a.role || '', note: LOCAL_NOTE, startUrl: a.startUrl || '' } });
 
 // ----- hexagon islands
 // Tiles are pointy-top hexagons in axial coordinates; tile 0 is the headquarters in the middle and the
@@ -89,6 +89,8 @@ export function buildWorld(data, config = {}, now = Date.now(), opts = {}) {
 
   const islands = [], agents = [];
   const addIsland = (name, repo, url, list) => {
+    // a status override (a run the Admin just requested) is drawn in place of the status the data still shows
+    if (opts.statusOverrides) list = list.map(a => (opts.statusOverrides[a.id] ? { ...a, status: opts.statusOverrides[a.id] } : a));
     const rings = ringsFor(list.length);
     islands.push({ name, repo, url, dormant: false, agentCount: list.length, rings, radius: round(islandRadius(rings)), health: healthOf(list) });
     list.forEach(a => agents.push({ ...a, island: name }));

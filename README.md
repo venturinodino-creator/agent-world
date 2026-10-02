@@ -33,7 +33,22 @@ feed lists it.
 ## Cowork / local agents
 
 GitHub cannot see agents that run elsewhere, so they are listed by hand in `src/config.mjs`. They are shown
-asleep and marked as not tracked live.
+asleep and marked as not tracked live. Give an agent a `startUrl` there to point its **Open in Cowork** button
+(Admin only) at the right place.
+
+## Activate (Admin only)
+
+Sign in once at `/agent-world/#admin` (the same login as the agent-hq admin page; nothing on the page links to it).
+While signed in, the card of any agent that is not working replaces the GitHub link with **Run now** or **Run again**.
+It asks to confirm, then starts the real GitHub workflow, shows the agent as working ("Run requested"), and follows the
+run until GitHub says it finished. Nobody else sees any of this.
+
+It works through a Supabase Edge Function (`supabase/functions/activate-agent`, see `docs/adr/0001`) that holds a
+fine-grained GitHub token as the secret `GITHUB_DISPATCH_TOKEN`. Create one with **Actions: read and write** on
+african-earth-energy-crm, belgium-crm, denmark-crm and netherlands-crm only, and add it under Edge Functions, Secrets in
+the Energy Lead Dashboard Supabase project. Until it exists, Activate answers "the GitHub token is missing". The server
+also enforces a two-minute cooldown per workflow and only starts workflows that declare a manual start, in repos that
+are switched ON in the admin list.
 
 ## How it is built
 

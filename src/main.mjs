@@ -7,6 +7,9 @@ import { renderPanel, ago } from './panel.mjs';
 import { renderList } from './list.mjs';
 import { replayClock, due, ERRAND_SECONDS } from './anim.mjs';
 import { createFeed } from './feed.mjs';
+import { initAdmin, isAdmin, onAdminChange, mountSignIn, signOut } from './admin.mjs';
+import { offerFor } from './activation.mjs';
+import { createRequests } from './requests.mjs';
 
 const $ = s => document.querySelector(s);
 const feed = createFeed($('#feed'));
@@ -51,10 +54,23 @@ if (!scene && !$('#banner').textContent) message('This browser could not start W
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); e.className = cls; if (text != null) e.textContent = text; return e; };
 
+// ----- Activate: only the signed-in Admin sees any of it (see activation.mjs and admin.mjs)
+const act = { confirming: null, busy: null, error: null };   // the card's confirm step, the request in flight, the last refusal
+await initAdmin();
+const reqs = createRequests({ onChange: () => rebuild() });
+mountSignIn($('#stage'));
+const showAdmin = () => { $('#btnAdmin').hidden = !isAdmin(); };
+showAdmin();
+$('#btnAdmin').onclick = () => signOut();
+onAdminChange(() => { showAdmin(); act.confirming = act.busy = act.error = null; reqs.resume(); if (state.data) rebuild(); });
+
 // ----- building and refreshing the world
 function rebuild() {
   if (!state.data) return;
-  state.world = buildWorld(state.data, CONFIG, Date.now(), { showDormant: state.showDormant });
+  const base = buildWorld(state.data, CONFIG, Date.now(), { showDormant: state.showDormant });
+  reqs.reconcileWith(base.agents);   // a run the hourly data has caught up with no longer needs its own overlay
+  const overrides = reqs.overrides();
+  state.world = Object.keys(overrides).length ? buildWorld(state.data, CONFIG, Date.now(), { showDormant: state.showDormant, statusOverrides: overrides }) : base;
   const w = state.world;
   if (state.selectedAgent && !w.agents.some(a => a.id === state.selectedAgent)) state.selectedAgent = null;
   if (state.selectedIsland && !w.islands.some(i => i.name === state.selectedIsland)) state.selectedIsland = null;
@@ -73,13 +89,33 @@ function rebuild() {
 function refreshUi() {
   if (state.world) renderList(side, state.world, state, { island: selectIsland, agent: selectAgent });
   const agent = state.world?.agents.find(a => a.id === state.selectedAgent) || null;
-  renderPanel(card, agent, clearSelection, Date.now(), { focus: () => scene?.focusAgent(state.selectedAgent) });
+  renderPanel(card, agent, clearSelection, Date.now(), { focus: () => scene?.focusAgent(state.selectedAgent), activation: agent && activationFor(agent) });
   if (agent) placeCard();
+}
+
+// What the card offers this agent right now, and what its buttons do (null when there is nothing to offer).
+function activationFor(agent) {
+  const request = reqs.requestFor(agent.id), ph = request ? reqs.phaseOf(request) : null;
+  const offer = offerFor(agent, { admin: isAdmin(), request, phase: ph?.phase });
+  if (!offer) return null;
+  return {
+    offer, confirming: act.confirming === agent.id, busy: act.busy === agent.id, runUrl: ph?.runUrl || null,
+    error: act.error?.id === agent.id ? act.error.message : '',
+    onAsk: () => { act.confirming = agent.id; act.error = null; refreshUi(); },
+    onCancel: () => { act.confirming = null; refreshUi(); },
+    onStart: async () => {
+      act.confirming = null; act.busy = agent.id; act.error = null; refreshUi();
+      const res = await reqs.start(agent);
+      act.busy = null; act.error = res.ok ? null : { id: agent.id, message: res.message };
+      refreshUi();
+    },
+  };
 }
 
 // ----- selection
 function selectAgent(id) {
   const a = state.world?.agents.find(x => x.id === id); if (!a) return;
+  if (act.confirming !== id) act.confirming = null;
   state.selectedAgent = id; state.selectedIsland = a.island; state.expanded.add(a.island);
   scene?.focusAgent(id); refreshUi();
 }

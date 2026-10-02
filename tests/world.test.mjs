@@ -184,3 +184,11 @@ test('agent details carry what the card needs', () => {
   const you = w.agents.find(x => x.name === 'You').details;
   assert.equal(you.recent[0].text, 'tidy up');
 });
+
+test('a status override redraws that agent and its island, and leaves the others alone', () => {
+  const repos = [repo('a', { workflows: [wf('Smoke'), wf('Deploy')] })];
+  const w = world(repos, undefined, { statusOverrides: { 'a::Smoke': 'running' } });
+  assert.deepEqual(agentsIn(w, 'a').map(x => [x.name, x.status]), [['Deploy', 'ok'], ['Smoke', 'running']]);
+  assert.equal(w.islands[0].health, 'running');
+  assert.equal(world(repos).islands[0].health, 'ok', 'without the override nothing changes');
+});

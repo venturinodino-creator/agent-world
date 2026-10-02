@@ -1,6 +1,7 @@
 // Agents that run outside GitHub (Cowork scheduled tasks, local scripts). GitHub cannot see these,
 // so they are listed by hand. status: 'scheduled' | 'running' | 'ok' | 'fail' | 'idle'.
 // A repo that is not in the loaded data is simply left out of the world, as is anything in it.
+// Optional startUrl: where the Admin's "Open in Cowork" button goes for that agent (https only; a generic link is used without it).
 export const CONFIG = {
   localAgents: [
     { name: 'NL Tender Scraper', repo: 'netherlands-crm', schedule: 'Weekdays · Cowork', role: 'TED + TenderNed + web sweep', status: 'scheduled' },
