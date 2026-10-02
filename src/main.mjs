@@ -52,7 +52,7 @@ function rebuild() {
 function refreshUi() {
   if (state.world) renderList(side, state.world, state, { island: selectIsland, agent: selectAgent });
   const agent = state.world?.agents.find(a => a.id === state.selectedAgent) || null;
-  renderPanel(card, agent, clearSelection);
+  renderPanel(card, agent, clearSelection, Date.now(), { focus: () => scene?.focusAgent(state.selectedAgent) });
   if (agent) placeCard();
 }
 
@@ -88,11 +88,14 @@ function placeCard() {
   const p = scene?.agentHead(state.selectedAgent), box = $('#stage').getBoundingClientRect();
   if (!p || !p.visible) { card.style.visibility = 'hidden'; return; }
   card.style.visibility = '';
-  const w = card.offsetWidth, h = card.offsetHeight;
-  const left = Math.min(Math.max(8, p.x - w / 2), box.width - w - 8);
-  let top = p.y - h - 28;
-  if (top < 8) top = Math.min(p.y + 40, box.height - h - 8);
-  card.style.left = `${left}px`; card.style.top = `${Math.max(8, top)}px`;
+  // beside the agent, as in the reference: to its right when there is room, otherwise to its left,
+  // and never under the repo panel on the right or the tool strip on the left
+  const w = card.offsetWidth, h = card.offsetHeight, minX = 52, maxX = box.width - (side.offsetWidth ? side.offsetWidth + 24 : 8) - w;
+  let left = p.x + 34;
+  if (left > maxX) left = p.x - w - 34;
+  left = Math.min(Math.max(minX, left), Math.max(minX, maxX));
+  const top = Math.min(Math.max(8, p.y - 70), box.height - h - 8);
+  card.style.left = `${left}px`; card.style.top = `${top}px`;
 }
 
 // ----- replay: events the clock passes get a bubble, a page flying to the hub and a feed line
@@ -158,8 +161,11 @@ if (scene) {
   });
 }
 
-$('#btnFit').onclick = () => scene?.fit();
-$('#btnDormant').onclick = () => { state.showDormant = !state.showDormant; state.needsFit = true; rebuild(); };
+const toggleDormant = () => { state.showDormant = !state.showDormant; state.needsFit = true; rebuild(); };
+$('#btnFit').onclick = $('#tbFit').onclick = () => scene?.fit();
+$('#btnDormant').onclick = $('#tbDormant').onclick = toggleDormant;
+$('#tbIn').onclick = () => scene?.zoom(0.7);
+$('#tbOut').onclick = () => scene?.zoom(1.4);
 
 refresh();
 setInterval(refresh, 5 * 60e3);

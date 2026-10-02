@@ -22,18 +22,22 @@
   <span class="meta" id="sync">loading…</span>
 </header>
 <div class="banner" id="banner" hidden></div>
-<div class="layout">
-  <main class="stage" id="stage">
-    <div class="labels" id="labels" aria-hidden="true"></div>
-    <aside class="card" id="card" hidden></aside>
-    <section class="feed" id="feed" aria-label="Activity feed">
-      <div class="ph"><span>Activity · last 24h replay</span></div>
-      <p class="empty" hidden>Quiet day: no commits or runs in the last 24 hours.</p>
-      <ul class="feed-list"></ul>
-    </section>
-  </main>
+<main class="stage" id="stage">
+  <div class="labels" id="labels" aria-hidden="true"></div>
+  <nav class="tools" aria-label="View controls">
+    <button id="tbFit" title="Frame the whole world" aria-label="Fit">⌂</button>
+    <button id="tbIn" title="Zoom in" aria-label="Zoom in">+</button>
+    <button id="tbOut" title="Zoom out" aria-label="Zoom out">−</button>
+    <button id="tbDormant" title="Show or hide quiet repos" aria-label="Dormant repos">☾</button>
+  </nav>
+  <aside class="card" id="card" hidden></aside>
+  <section class="feed" id="feed" aria-label="Activity feed">
+    <div class="ph"><span>Activity · last 24h replay</span></div>
+    <p class="empty" hidden>Quiet day: no commits or runs in the last 24 hours.</p>
+    <ul class="feed-list"></ul>
+  </section>
   <aside class="side" id="side" aria-label="Repos and agents"></aside>
-</div>
+</main>
 <script type="module" src="src/main.mjs"></script>
 </body>
 </html>
