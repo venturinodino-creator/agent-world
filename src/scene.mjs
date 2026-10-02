@@ -308,7 +308,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       const halo = a.status === 'running' ? new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.04, 8, 32), new THREE.MeshBasicMaterial({ color: 0x7fe9ff, transparent: true })) : null;
       if (halo) { halo.rotation.x = Math.PI / 2; root.add(halo); }
       const dx = a.pos.x - isl.x, dz = a.pos.z - isl.z, len = Math.hypot(dx, dz) || 1;
-      const alarm = a.status === 'fail' ? symbolSprite('!', '#ff5a4a') : null, zs = a.status === 'running' || a.status === 'fail' ? [] : [sleepSprite()];   // not working: ok, idle or asleep
+      const alarm = a.status === 'fail' ? symbolSprite('!', '#ff5a4a') : null, zs = a.status === 'asleep' || a.status === 'idle' ? [sleepSprite()] : [];   // zzz only for agents that are really asleep (scheduled Cowork tasks) or idle; 'ok' ones just finished a run and wait for the next
       const icon = a.status === 'running' ? iconProto.clone() : null;
       [alarm, icon, ...zs].filter(Boolean).forEach(s => root.add(s));
       root.add(building, robot); S.pickables.push(building, robot);
