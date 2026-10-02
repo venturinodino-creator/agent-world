@@ -5,10 +5,9 @@ import { THREE, STATUS, HEALTH, PALETTE, buildPod, buildRobot, buildingFor, buil
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { tileOffsets } from './world.mjs';
-import { pose, hash } from './anim.mjs';
+import { pose, hash, errand, routeBot } from './anim.mjs';
 
 const WALK_UNITS = 0.5 / 14;          // pose offsets are in old pixel units; this turns them into tiles
-const HUB_TOP = new THREE.Vector3(0, 6.0, 0);
 const RESULT_HEX = { ok: 0x41e08a, fail: 0xff5d6c, running: 0x3fd7e8 };
 const FOG = 0xf0dbc0;
 
@@ -100,7 +99,7 @@ export function createScene(container) {
   scene.add(sun, sun.target);
 
   const S = { world: null, root: new THREE.Group(), agents: new Map(), pickables: [], rocks: [], hub: null, focus: null, papers: new Map(),
-    ring: null, bots: null, size: { w: 1, h: 1 } };
+    ring: null, bots: null, hqs: new Map(), hubTop: new THREE.Vector3(0, 6, 0), size: { w: 1, h: 1 } };
   scene.add(S.root);
   S.ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.035, 8, 40), new THREE.MeshBasicMaterial({ color: 0xffe066 }));
   S.ring.rotation.x = Math.PI / 2; S.ring.visible = false; scene.add(S.ring);
@@ -110,8 +109,13 @@ export function createScene(container) {
 
   function resize() {
     const w = container.clientWidth || 1, h = container.clientHeight || 1;
-    S.size = { w, h }; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+    S.size = { w, h }; renderer.setSize(w, h); camera.aspect = w / h; applyInset();
   }
+  // Shifts the picture left so the world is centred in the part of the view that the side panel does not cover.
+  function applyInset() {
+    camera.setViewOffset(S.size.w, S.size.h, (S.inset || 0) / 2, 0, S.size.w, S.size.h); camera.updateProjectionMatrix();
+  }
+  const setInset = px => { S.inset = px; applyInset(); };
   new ResizeObserver(resize).observe(container); resize();
 
   // ----- camera
@@ -125,7 +129,7 @@ export function createScene(container) {
   };
   function fit(instant = false) {
     if (!S.world) return;
-    const o = overview(S.world.bounds.radius + 3);
+    const o = overview(S.world.bounds.radius * 0.9 + 2);   // the tilt foreshortens depth, so it can be framed closer
     controls.maxDistance = o.position.length() * 2.2;
     if (instant) { controls.target.copy(o.target); camera.position.copy(o.position); } else glide(o.target, o.position, 0.8);
   }
@@ -137,7 +141,7 @@ export function createScene(container) {
   // ----- building the world
   function clear() {
     S.root.traverse(o => { o.geometry?.dispose?.(); [].concat(o.material || []).forEach(m => { m.map?.dispose?.(); m.dispose(); }); });
-    S.root.clear(); S.agents.clear(); S.pickables = []; S.rocks = []; S.bots = null; S.papers.forEach(p => p.removeFromParent()); S.papers.clear();
+    S.root.clear(); S.agents.clear(); S.hqs.clear(); S.pickables = []; S.rocks = []; S.bots = null; S.papers.forEach(p => p.removeFromParent()); S.papers.clear();
   }
 
   // Props scattered on the empty tiles: solar-panel fields, crate stacks and tanks, so islands look lived in.
@@ -168,44 +172,58 @@ export function createScene(container) {
     add(tank, tanks, () => 0.32, () => PALETTE.white, (p, e) => e.set(0, 0, 0));
   }
 
-  // Tiny robots wandering around every island: instanced bodies and heads.
+  // Little workers shuttling between the buildings and each island's headquarters all day: out with a crate,
+  // back empty-handed. Instanced bodies, heads and crates.
   function ambientBots(world) {
-    const list = [], rnd = lcg(5);
+    const list = [], rnd = lcg(5), crateColors = [PALETTE.red, PALETTE.white, PALETTE.teal, PALETTE.yellow];
     world.islands.forEach(isl => {
       if (isl.dormant) return;
-      const n = Math.min(40, 4 + Math.round(isl.agentCount * 1.6));
+      const tiles = tileOffsets(isl.rings).slice(1), n = Math.min(90, 12 + Math.round(isl.agentCount * 2.5));
       for (let i = 0; i < n; i++) {
-        const a = rnd() * Math.PI * 2, d = rnd() * (isl.radius - 1.4);
-        list.push({ x: isl.x + Math.cos(a) * d, z: isl.z + Math.sin(a) * d, rad: 0.25 + rnd() * 0.5, sp: 0.2 + rnd() * 0.5, ph: rnd() * 6.3, hue: rnd() });
+        const t = tiles[Math.floor(rnd() * tiles.length)], ax = isl.x + t.x + (rnd() - 0.5) * 0.5, az = isl.z + t.z + (rnd() - 0.5) * 0.5;
+        const dx = ax - isl.x, dz = az - isl.z, len = Math.hypot(dx, dz) || 1;
+        list.push({ isl: isl.name, ax, az, bx: isl.x + (dx / len) * 1.5, bz: isl.z + (dz / len) * 1.5, side: rnd() < 0.5 ? 1 : -1,
+          sp: 0.07 + rnd() * 0.07, ph: rnd() * 2, hue: rnd(), crate: crateColors[Math.floor(rnd() * 4)] });
       }
     });
     if (!list.length) return;
-    const body = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.045, 0.1, 4, 8), new THREE.MeshStandardMaterial({ roughness: 0.5 }), list.length);
-    const head = new THREE.InstancedMesh(new THREE.SphereGeometry(0.06, 10, 8), new THREE.MeshStandardMaterial({ color: 0xf3f6ff, roughness: 0.5 }), list.length);
+    const body = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.09, 0.2, 4, 8), new THREE.MeshStandardMaterial({ roughness: 0.5 }), list.length);
+    const head = new THREE.InstancedMesh(new THREE.SphereGeometry(0.115, 10, 8), new THREE.MeshStandardMaterial({ color: 0xf3f6ff, roughness: 0.5 }), list.length);
+    const crate = new THREE.InstancedMesh(new RoundedBoxGeometry(0.24, 0.24, 0.24, 2, 0.04), new THREE.MeshStandardMaterial({ roughness: 0.45 }), list.length);
     const c = new THREE.Color();
-    list.forEach((b, i) => body.setColorAt(i, c.setHex(b.hue < 0.12 ? 0xff5a5a : b.hue < 0.2 ? 0xff9ec0 : b.hue < 0.55 ? 0xdbeaff : 0x9fcdf5)));
-    body.castShadow = head.castShadow = true;
-    S.root.add(body, head); S.bots = { list, body, head, m: new THREE.Matrix4(), q: new THREE.Quaternion(), p: new THREE.Vector3(), one: new THREE.Vector3(1, 1, 1) };
+    list.forEach((b, i) => { body.setColorAt(i, c.setHex(b.hue < 0.12 ? 0xff5a5a : b.hue < 0.2 ? 0xff9ec0 : b.hue < 0.55 ? 0xdbeaff : 0x9fcdf5)); crate.setColorAt(i, c.setHex(b.crate)); });
+    body.castShadow = head.castShadow = crate.castShadow = true;
+    S.root.add(body, head, crate);
+    S.bots = { list, body, head, crate, m: new THREE.Matrix4(), q: new THREE.Quaternion(), p: new THREE.Vector3(), one: new THREE.Vector3(1, 1, 1), hide: new THREE.Vector3(0.001, 0.001, 0.001) };
   }
 
   function setWorld(world, { refit = false } = {}) {
     clear(); S.world = world;
     const R = world.bounds.radius, root = S.root;
     root.add(desert(R));
-    S.hub = buildHub(); root.add(S.hub);
-
     // each island: a coral-sided slate platform with a square-tile floor and a bright health-coloured rim
-    const padGeo = new THREE.CylinderGeometry(0.58, 0.62, 0.05, 8), pads = [];
-    world.islands.forEach(isl => {
-      const h = isl.health, tex = floorTexture(h).clone(); tex.needsUpdate = true;
+    const addPlate = (isl, floor, rimHex, rimK) => {
+      const tex = floorTexture(floor).clone(); tex.needsUpdate = true;
       tex.repeat.set((isl.radius * 2) / 2.6, (isl.radius * 2) / 2.6); tex.center.set(0.5, 0.5); tex.rotation = Math.PI / 4;
       const plate = new THREE.Mesh(new THREE.CylinderGeometry(isl.radius - 0.02, isl.radius - 0.02, 0.5, 6), [
-        new THREE.MeshStandardMaterial({ color: SIDE[h] ?? SIDE.ok, roughness: 0.55 }), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.75 }), new THREE.MeshStandardMaterial({ color: 0x20212a })]);
+        new THREE.MeshStandardMaterial({ color: SIDE[floor] ?? SIDE.ok, roughness: 0.55 }), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.75 }), new THREE.MeshStandardMaterial({ color: 0x20212a })]);
       plate.rotation.y = Math.PI / 2; plate.position.set(isl.x, -0.13, isl.z); plate.castShadow = true; plate.receiveShadow = true; root.add(plate);
-      const rim = new THREE.Mesh(rimGeometry(isl.radius, 0.34), new THREE.MeshStandardMaterial({ color: HEALTH[h] ?? HEALTH.ok, emissive: HEALTH[h] ?? HEALTH.ok, emissiveIntensity: isl.dormant ? 0.1 : 0.5, roughness: 0.4 }));
+      const rim = new THREE.Mesh(rimGeometry(isl.radius, 0.34), new THREE.MeshStandardMaterial({ color: rimHex, emissive: rimHex, emissiveIntensity: rimK, roughness: 0.4 }));
       rim.position.set(isl.x, 0.12, isl.z); rim.castShadow = true; root.add(rim);
+    };
+
+    // the hub tower stands on its own cell in the middle of the honeycomb
+    const hubScale = THREE.MathUtils.clamp(world.hub.radius / 4.6, 1, 1.9);
+    addPlate({ x: 0, z: 0, radius: world.hub.radius }, 'dormant', 0x59d6ff, 0.7);
+    S.hub = buildHub(); S.hub.scale.setScalar(hubScale); S.hub.position.y = 0.12; root.add(S.hub); S.hubTop.set(0, 6.1 * hubScale + 0.12, 0);
+
+    const padGeo = new THREE.CylinderGeometry(0.58, 0.62, 0.05, 8), pads = [];
+    world.islands.forEach(isl => {
+      const h = isl.health;
+      addPlate(isl, h, HEALTH[h] ?? HEALTH.ok, isl.dormant ? 0.1 : 0.5);
       const hq = buildPod(isl.dormant ? 'asleep' : h === 'fail' ? 'fail' : 'ok', isl.dormant ? 1.4 : 1.75);
       hq.position.set(isl.x, 0.12, isl.z); hq.userData.island = isl.name; root.add(hq); S.pickables.push(hq);
+      S.hqs.set(isl.name, { mats: hq.userData.mats, last: -9 });
       tileOffsets(isl.rings).forEach((t, i) => { if (i <= isl.agentCount) pads.push([isl.x + t.x, isl.z + t.z, i === 0 ? 1.7 : 1, FLOOR[h]?.[0] ?? FLOOR.ok[0]]); });
     });
     if (pads.length) {
@@ -221,13 +239,18 @@ export function createScene(container) {
       building.rotation.y = Math.floor(ph * 8) * (Math.PI / 4);
       building.scale.setScalar(1.2);   // chunky, like the reference
       building.userData.agentId = a.id;
-      const robot = buildRobot(a.kind, a.name); robot.position.set(a.pos.x, 0.14, a.pos.z + 0.62);
-      robot.userData.agentId = a.id;
+      const robot = buildRobot(a.kind, a.name); robot.position.set(a.pos.x, 0.14, a.pos.z + 0.7);
+      robot.scale.setScalar(1.5); robot.userData.agentId = a.id;
+      const carry = new THREE.Mesh(new RoundedBoxGeometry(0.2, 0.2, 0.2, 2, 0.04), new THREE.MeshStandardMaterial({ color: PALETTE.red, roughness: 0.45 }));
+      carry.position.set(0, 0.8, 0); carry.visible = false; robot.add(carry);
+      const sparks = a.status === 'running' ? Array.from({ length: 6 }, () => { const sp = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), new THREE.MeshBasicMaterial({ color: 0xfff1a8 })); root.add(sp); return sp; }) : [];
+      const dx = a.pos.x - isl.x, dz = a.pos.z - isl.z, len = Math.hypot(dx, dz) || 1;
       const alarm = a.status === 'fail' ? symbolSprite('!', '#ff5a4a') : null, zs = a.status === 'asleep' ? [0, 1, 2].map(() => symbolSprite('z', '#d6defa')) : [];
       const icon = a.status === 'running' ? iconProto.clone() : null;
       [alarm, icon, ...zs].filter(Boolean).forEach(s => root.add(s));
       root.add(building, robot); S.pickables.push(building, robot);
-      S.agents.set(a.id, { agent: a, building, robot, bx: a.pos.x, bz: a.pos.z + 0.62, ph, alarm, icon, zs, island: isl });
+      S.agents.set(a.id, { agent: a, building, robot, carry, sparks, bx: a.pos.x, bz: a.pos.z + 0.7, ph, alarm, icon, zs, island: isl,
+        hq: { x: isl.x + (dx / len) * 1.5, z: isl.z + (dz / len) * 1.5 } });
     }
 
     // drifting dark rocks above the world
@@ -261,7 +284,7 @@ export function createScene(container) {
     v.set(x, y, z).project(camera);
     return { x: (v.x * 0.5 + 0.5) * S.size.w, y: (-v.y * 0.5 + 0.5) * S.size.h, visible: v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 };
   }
-  const agentHead = id => { const r = S.agents.get(id); return r ? project(r.robot.position.x, 0.95, r.robot.position.z) : null; };
+  const agentHead = id => { const r = S.agents.get(id); return r ? project(r.robot.position.x, 1.45, r.robot.position.z) : null; };
   const islandLabel = isl => project(isl.x, 3.6, isl.z);
 
   function focusAgent(id) {
@@ -277,6 +300,13 @@ export function createScene(container) {
 
   // ----- per-frame animation
   const paperGeo = new THREE.BoxGeometry(0.22, 0.28, 0.02), tmp = new THREE.Vector3(), eul = new THREE.Euler();
+  // The errand this agent is on right now (the newest one that has started), with how far along it is.
+  const errandFor = (list, id, t) => {
+    let best = null;
+    for (const e of list || []) if (e.agentId === id && t >= e.start && (!best || e.start > best.start)) best = e;
+    const ph = best && errand(t - best.start);
+    return ph ? { ...ph, result: best.result } : null;
+  };
   function update(t, ui = {}) {
     if (S.focus) {
       const k = Math.min(1, (performance.now() - S.focus.t0) / S.focus.dur), e = k * k * (3 - 2 * k);
@@ -287,31 +317,52 @@ export function createScene(container) {
 
     for (const r of S.agents.values()) {
       const a = r.agent, p = pose(a, t), mats = r.building.userData.mats, boost = a.id === ui.selectedId ? 1.2 : a.id === ui.hoverId ? 0.8 : 0;
-      const dx = p.dx * WALK_UNITS;
-      r.robot.position.x = r.bx + dx;
-      r.robot.position.y = 0.14 + (p.typing ? Math.abs(Math.sin(t * 10 + r.ph * 6)) * 0.07 : p.asleep ? -0.02 : Math.sin(t * 2 + r.ph * 6) * 0.012);
-      r.robot.rotation.y = p.walking ? (p.facing > 0 ? Math.PI / 2 : -Math.PI / 2) : 0;
-      r.robot.rotation.z = p.asleep ? 1.25 : 0;
-      r.robot.userData.arms.forEach((arm, i) => { arm.rotation.x = p.typing ? Math.sin(t * 14 + i * Math.PI) * 0.9 : p.walking ? Math.sin(t * 9 + i * Math.PI) * 0.5 : 0; });
+      const er = errandFor(ui.errands, a.id, t);
+      let rx = r.bx + p.dx * WALK_UNITS, rz = r.bz, yaw = p.walking ? (p.facing > 0 ? Math.PI / 2 : -Math.PI / 2) : 0, y = 0.14 + (p.typing ? Math.abs(Math.sin(t * 10 + r.ph * 6)) * 0.07 : p.asleep ? -0.02 : Math.sin(t * 2 + r.ph * 6) * 0.012);
+      let walking = p.walking;
+      if (er) {                      // an errand: carry a crate to the headquarters, drop it off, come back
+        rx = r.bx + (r.hq.x - r.bx) * er.u; rz = r.bz + (r.hq.z - r.bz) * er.u;
+        const back = !er.carrying && !er.depositing, k = back ? -1 : 1;
+        yaw = Math.atan2((r.hq.x - r.bx) * k, (r.hq.z - r.bz) * k);
+        y = 0.14 + (er.depositing ? Math.abs(Math.sin(t * 12)) * 0.12 : Math.abs(Math.sin(t * 9 + r.ph * 5)) * 0.05);
+        walking = !er.depositing; r.carry.material.color.setHex(RESULT_HEX[er.result] ?? PALETTE.red);
+        if (er.depositing) { const hq = S.hqs.get(a.island); if (hq) hq.last = t; }
+      }
+      r.carry.visible = !!er?.carrying;
+      r.robot.position.set(rx, y, rz);
+      r.robot.rotation.y = yaw;
+      r.robot.rotation.z = p.asleep && !er ? 1.25 : er && walking ? Math.sin(t * 9 + r.ph * 5) * 0.1 : 0;
+      r.robot.userData.arms.forEach((arm, i) => { arm.rotation.x = p.typing && !er ? Math.sin(t * 14 + i * Math.PI) * 0.9 : walking ? Math.sin(t * 9 + i * Math.PI) * 0.6 : 0; });
       r.robot.userData.body.emissive.setHex(p.alarm ? 0xff2244 : 0x000000);
       r.robot.userData.body.emissiveIntensity = p.alarm ? 0.7 : 0;
       const pulse = a.status === 'running' ? 0.6 + 0.5 * Math.sin(t * 6 + r.ph * 6) : a.status === 'fail' ? (p.alarm ? 1.4 : 0.3) : 0;
       mats.ring.emissiveIntensity = 1.0 + pulse + boost;
       if (a.status === 'fail') mats.body.emissive.setHex(p.alarm ? 0x66101c : 0x000000);
-      if (r.alarm) r.alarm.position.set(r.robot.position.x, 0.98 + Math.sin(t * 6) * 0.04, r.bz);
-      if (r.icon) r.icon.position.set(r.robot.position.x, 1.0 + Math.sin(t * 3 + r.ph * 6) * 0.05, r.bz);
-      r.zs.forEach((z, i) => { const k = ((t * 0.5 + i / 3 + r.ph) % 1); z.position.set(r.bx + 0.15 + k * 0.25, 0.7 + k * 0.5, r.bz); z.material.opacity = 1 - k; z.scale.setScalar(0.18 + k * 0.2); });
+      if (r.alarm) r.alarm.position.set(rx, 1.5 + Math.sin(t * 6) * 0.04, rz);
+      if (r.icon) r.icon.position.set(rx, 1.6 + Math.sin(t * 3 + r.ph * 6) * 0.05, rz);
+      r.zs.forEach((z, i) => { const k = ((t * 0.5 + i / 3 + r.ph) % 1); z.position.set(r.bx + 0.2 + k * 0.3, 0.95 + k * 0.5, r.bz); z.material.opacity = 1 - k; z.scale.setScalar(0.2 + k * 0.22); });
+      r.sparks.forEach((sp, i) => {   // a working agent throws sparks off its building
+        const u = (t * 1.6 + i / 6 + r.ph) % 1, ang = i * 1.1 + r.ph * 6;
+        sp.position.set(r.bx + Math.cos(ang) * 0.4 * u, 0.75 + u * 0.7, r.bz - 0.7 + Math.sin(ang) * 0.4 * u); sp.scale.setScalar(Math.max(0.01, 1 - u));
+      });
     }
 
+    for (const hq of S.hqs.values()) hq.mats.ring.emissiveIntensity = 1.0 + Math.max(0, 1 - (t - hq.last) / 0.7) * 1.8;
+
     if (S.bots) {
-      const { list, body, head, m, q, p, one } = S.bots;
+      const { list, body, head, crate, m, q, p, one, hide } = S.bots;
       list.forEach((b, i) => {
-        const a = t * b.sp + b.ph, x = b.x + Math.cos(a) * b.rad, z = b.z + Math.sin(a * 1.3) * b.rad, bob = Math.abs(Math.sin(t * 6 + b.ph)) * 0.015;
-        q.setFromEuler(eul.set(0, -a, 0));
-        m.compose(p.set(x, 0.3 + bob, z), q, one); body.setMatrixAt(i, m);
-        m.compose(p.set(x, 0.43 + bob, z), q, one); head.setMatrixAt(i, m);
+        const w = routeBot(b, t), x = b.ax + (b.bx - b.ax) * w.u, z = b.az + (b.bz - b.az) * w.u;
+        const nx = -(b.bz - b.az), nz = b.bx - b.ax, nl = Math.hypot(nx, nz) || 1, sway = Math.sin(w.u * Math.PI) * 0.3 * b.side;
+        const px = x + (nx / nl) * sway, pz = z + (nz / nl) * sway, dir = w.forward ? 1 : -1;
+        const bob = Math.abs(Math.sin(t * 9 + b.ph * 5)) * 0.035;
+        q.setFromEuler(eul.set(0, Math.atan2((b.bx - b.ax) * dir, (b.bz - b.az) * dir), Math.sin(t * 9 + b.ph * 5) * 0.12));
+        m.compose(p.set(px, 0.4 + bob, pz), q, one); body.setMatrixAt(i, m);
+        m.compose(p.set(px, 0.64 + bob, pz), q, one); head.setMatrixAt(i, m);
+        m.compose(p.set(px, 0.92 + bob, pz), q, w.carrying ? one : hide); crate.setMatrixAt(i, m);
+        if (w.forward && w.u > 0.93) { const hq = S.hqs.get(b.isl); if (hq) hq.last = t; }
       });
-      body.instanceMatrix.needsUpdate = true; head.instanceMatrix.needsUpdate = true;
+      body.instanceMatrix.needsUpdate = head.instanceMatrix.needsUpdate = crate.instanceMatrix.needsUpdate = true;
     }
 
     S.rocks.forEach(rk => { rk.position.y = rk.userData.y + Math.sin(t * 0.4 + rk.userData.ph) * 0.4; rk.rotation.y += 0.002 * rk.userData.spin; rk.rotation.x += 0.001 * rk.userData.spin; });
@@ -331,12 +382,12 @@ export function createScene(container) {
       if (!mm) { mm = new THREE.Mesh(paperGeo, new THREE.MeshStandardMaterial({ color: 0xf4f8ff, emissive: RESULT_HEX[pg.result] || 0x3fd7e8, emissiveIntensity: 0.6 })); S.papers.set(pg, mm); }
       if (!mm.parent) scene.add(mm);
       const e = k * k * (3 - 2 * k);
-      tmp.set(r.bx, 1.1, r.bz).lerp(HUB_TOP, e); tmp.y += Math.sin(k * Math.PI) * 2.2;
+      tmp.set(r.bx, 1.1, r.bz).lerp(S.hubTop, e); tmp.y += Math.sin(k * Math.PI) * 2.2;
       mm.position.copy(tmp); mm.rotation.set(0, t * 6, Math.sin(t * 8) * 0.4); mm.scale.setScalar(1 - k * 0.35);
     }
     renderer.render(scene, camera);
   }
 
-  return { setWorld, update, pick, project, agentHead, islandLabel, focusAgent, focusIsland, fit, zoom, hasAgent: id => S.agents.has(id),
+  return { setWorld, update, pick, project, agentHead, islandLabel, focusAgent, focusIsland, fit, zoom, setInset, hasAgent: id => S.agents.has(id),
     element: renderer.domElement };
 }

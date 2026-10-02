@@ -34,6 +34,25 @@ export function pose(agent, t) {
   }
 }
 
+// An errand is what an agent's robot does when something happens to that agent: it walks to the island's
+// headquarters carrying a crate, drops it off, and walks back with empty hands. u runs 0 (at its building) to
+// 1 (at the headquarters). Returns null before it starts and after it ends. Times are in seconds.
+export const ERRAND_SECONDS = 3.6;
+export function errand(elapsed) {
+  if (elapsed < 0 || elapsed > ERRAND_SECONDS) return null;
+  const k = elapsed / ERRAND_SECONDS;
+  if (k < 0.4) return { u: k / 0.4, carrying: true, depositing: false };
+  if (k < 0.6) return { u: 1, carrying: false, depositing: true };
+  return { u: 1 - (k - 0.6) / 0.4, carrying: false, depositing: false };
+}
+
+// The little workers that shuttle between buildings and the headquarters all day: out with a crate, back
+// empty, forever. `route.sp` is legs per second, `route.ph` how far through the round trip (0..2) it starts.
+export function routeBot(route, t) {
+  const x = (((t * route.sp + route.ph) % 2) + 2) % 2;
+  return x < 1 ? { u: x, carrying: true, forward: true } : { u: 2 - x, carrying: false, forward: false };
+}
+
 // The replay sweeps the last 24 hours of real time in loopMs of wall time, then starts again.
 export function replayClock(elapsedMs, now, loopMs) {
   return now - DAY + ((elapsedMs % loopMs) / loopMs) * DAY;

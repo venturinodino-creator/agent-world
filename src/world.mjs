@@ -8,7 +8,8 @@ const RUNNING_WINDOW = 30 * 60e3;   // a commit this fresh means the committer i
 const RECENT = 5;            // recent items kept per agent for the detail card
 
 const SQRT3 = Math.sqrt(3);
-const GAP = 2, HUB_RADIUS = 3;        // spacing between islands, size of the hub tower's base
+const GAP = 0.7;                      // the strip of sand between neighbouring islands
+const CLOSED_RADIUS = 2.4;            // closed (dormant) islands are small
 const HEX_DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 
 const byName = (a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
@@ -70,29 +71,14 @@ function healthOf(agents) {
   return agents.some(a => a.status === 'ok') ? 'ok' : 'idle';
 }
 
-const apart = (c, others) => others.every(o => Math.hypot(c.x - o.x, c.z - o.z) >= c.radius + o.radius + GAP);
-
-// Islands sit on a ring around the hub; the ring grows until nothing touches anything in `avoid`.
-function ring(islands, avoid, start) {
-  const n = islands.length;
-  if (!n) return [];
-  for (let rho = start; ; rho += 0.5) {
-    const placed = islands.map((isl, i) => {
-      const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
-      return { x: round(rho * Math.cos(a)), z: round(rho * Math.sin(a)), radius: isl.radius };
-    });
-    if (placed.every((p, i) => apart(p, avoid) && apart(p, placed.slice(i + 1)))) return placed;
-  }
-}
-
-// Live islands take the inner ring; closed (dormant) ones get an outer ring so they never crowd the live ones.
+// Islands are packed like a honeycomb, as in the reference: the hub takes the middle cell and the islands
+// spiral out around it, live ones first. Every cell is the size of the busiest island, so they sit edge to
+// edge with a small gap. Island hexagons have their corners on the x axis, so neighbours lie at 30°, 90°, …
 function layout(islands) {
-  const hub = { x: 0, z: 0, radius: HUB_RADIUS };
-  const live = islands.filter(i => !i.dormant), closed = islands.filter(i => i.dormant);
-  const inner = ring(live, [hub], HUB_RADIUS + GAP + Math.max(0, ...live.map(i => i.radius)));
-  const reach = Math.max(HUB_RADIUS, ...inner.map(p => Math.hypot(p.x, p.z) + p.radius));
-  const outer = ring(closed, [hub, ...inner], reach + GAP + Math.max(0, ...closed.map(i => i.radius)));
-  return { hub, placed: [...inner, ...outer] };
+  const cell = Math.max(islandRadius(1), ...islands.map(i => i.radius)), step = SQRT3 * cell + GAP;
+  const cells = spiral(islands.length + 1).slice(1);
+  const placed = cells.map(([q, r]) => ({ x: round(step * q * Math.cos(Math.PI / 6)), z: round(step * (q * Math.sin(Math.PI / 6) + r)) }));
+  return { hub: { x: 0, z: 0, radius: round(cell) }, placed };
 }
 
 export function buildWorld(data, config = {}, now = Date.now(), opts = {}) {
@@ -111,8 +97,11 @@ export function buildWorld(data, config = {}, now = Date.now(), opts = {}) {
   const lobby = locals.filter(a => !a.repo);
   if (lobby.length) addIsland('Lobby', null, null, lobby.map(a => localAgent(a, null, 'Lobby')));
   if (opts.showDormant) {
-    for (const r of repos.filter(isDormant)) islands.push({ name: r.name, repo: r.name, url: r.url, dormant: true, agentCount: 0, rings: 1, radius: round(islandRadius(1)), health: 'dormant' });
+    for (const r of repos.filter(isDormant)) islands.push({ name: r.name, repo: r.name, url: r.url, dormant: true, agentCount: 0, rings: 1, radius: CLOSED_RADIUS, health: 'dormant' });
   }
+  // live islands all take the size of the busiest one, so the honeycomb is even
+  const rings = Math.max(1, ...islands.filter(i => !i.dormant).map(i => i.rings));
+  islands.filter(i => !i.dormant).forEach(i => { i.rings = rings; i.radius = round(islandRadius(rings)); });
 
   const { hub, placed } = layout(islands);
   islands.forEach((isl, i) => { isl.x = placed[i].x; isl.z = placed[i].z; });
@@ -142,6 +131,6 @@ export function buildWorld(data, config = {}, now = Date.now(), opts = {}) {
   }
   events.sort((a, b) => ms(a.time) - ms(b.time) || (a.agentId < b.agentId ? -1 : 1));
 
-  const radius = Math.max(HUB_RADIUS, ...islands.map(i => Math.hypot(i.x, i.z) + i.radius));
+  const radius = Math.max(hub.radius, ...islands.map(i => Math.hypot(i.x, i.z) + i.radius));
   return { islands, agents, events, hub, bounds: { radius: Math.ceil(radius * 1000) / 1000 }, generatedAt: data.generatedAt || null };
 }

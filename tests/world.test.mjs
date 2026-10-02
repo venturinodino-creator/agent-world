@@ -75,11 +75,14 @@ test('there is no lobby when nobody lives in it', () => {
   assert.ok(!world([repo('a')]).islands.some(r => r.name === 'Lobby'));
 });
 
-test('islands grow with the number of agents', () => {
+test('live islands share one size, big enough for the busiest repo', () => {
   const many = [...Array(13)].map((_, i) => wf('wf' + String(i).padStart(2, '0')));
   const w = world([repo('big', { workflows: many }), repo('small', { workflows: [wf('one')] })]);
-  const radius = n => w.islands.find(x => x.name === n).radius;
-  assert.ok(radius('big') > radius('small'));
+  const [big, small] = ['big', 'small'].map(n => w.islands.find(x => x.name === n));
+  assert.equal(big.radius, small.radius);
+  assert.equal(big.rings, small.rings);
+  const alone = world([repo('small', { workflows: [wf('one')] })]).islands[0];
+  assert.ok(big.radius > alone.radius, 'the shared size grows with the busiest repo');
 });
 
 test('every agent stands on its own tile inside its own island, away from the headquarters tile', () => {
@@ -95,24 +98,32 @@ test('every agent stands on its own tile inside its own island, away from the he
   }
 });
 
-test('islands and the hub never overlap, and the world radius encloses them all', () => {
-  const repos = ['a', 'b', 'c', 'd', 'e'].map((n, i) => repo(n, { workflows: [...Array(i * 3 + 1)].map((_, j) => wf('w' + j)) }));
+// Islands are hexagons packed like a honeycomb: two of them are clear of each other when their centres are
+// at least the sum of their inner radii (centre to edge) apart.
+const inner = i => (Math.sqrt(3) / 2) * i.radius;
+const clear = (p, q) => dist(p, q) >= inner(p) + inner(q) - 1e-6;
+
+test('islands pack around the hub like a honeycomb without overlapping, inside the world radius', () => {
+  const repos = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((n, i) => repo(n, { workflows: [...Array(i * 2 + 1)].map((_, j) => wf('w' + j)) }));
   const w = world(repos);
-  const circles = [{ name: 'hub', ...w.hub }, ...w.islands];
-  circles.forEach((p, i) => {
+  assert.deepEqual([w.hub.x, w.hub.z], [0, 0]);
+  const cells = [{ name: 'hub', ...w.hub }, ...w.islands];
+  cells.forEach((p, i) => {
     assert.ok(Math.hypot(p.x, p.z) + p.radius <= w.bounds.radius + 1e-6, `${p.name} is inside the world`);
-    circles.slice(i + 1).forEach(q => assert.ok(dist(p, q) >= p.radius + q.radius, `${p.name} overlaps ${q.name}`));
+    cells.slice(i + 1).forEach(q => assert.ok(clear(p, q), `${p.name} overlaps ${q.name}`));
   });
+  const nearest = Math.min(...w.islands.map(i => Math.hypot(i.x, i.z)));
+  assert.ok(nearest < Math.sqrt(3) * w.hub.radius + 1.5, 'the first islands touch the hub cell, with only a small gap');
 });
 
-test('closed islands sit further out than live ones and nothing overlaps', () => {
+test('closed islands are smaller, take cells after the live ones and overlap nothing', () => {
   const live = ['a', 'b', 'c'].map(n => repo(n, { workflows: [wf('w1'), wf('w2'), wf('w3')] }));
   const old = ['x', 'y', 'z', 'q'].map(n => repo(n, { pushed: iso(24 * 90) }));
   const w = world([...live, ...old], undefined, { showDormant: true });
-  const from = i => Math.hypot(i.x, i.z);
-  assert.ok(Math.min(...w.islands.filter(r => r.dormant).map(from)) > Math.max(...w.islands.filter(r => !r.dormant).map(from)), 'closed islands are further out');
-  const circles = [{ name: 'hub', ...w.hub }, ...w.islands];
-  circles.forEach((p, i) => circles.slice(i + 1).forEach(q => assert.ok(dist(p, q) >= p.radius + q.radius, `${p.name} overlaps ${q.name}`)));
+  assert.deepEqual(w.islands.map(i => i.dormant), [false, false, false, true, true, true, true]);
+  assert.ok(w.islands.filter(i => i.dormant).every(i => i.radius < w.islands[0].radius));
+  const cells = [{ name: 'hub', ...w.hub }, ...w.islands];
+  cells.forEach((p, i) => cells.slice(i + 1).forEach(q => assert.ok(clear(p, q), `${p.name} overlaps ${q.name}`)));
 });
 
 test('an island is a hexagonal patch of tiles, all distinct and all inside its radius', () => {

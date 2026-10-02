@@ -5,19 +5,20 @@ import { loadData } from './data.mjs';
 import { CONFIG } from './config.mjs';
 import { renderPanel, ago } from './panel.mjs';
 import { renderList } from './list.mjs';
-import { replayClock, due } from './anim.mjs';
+import { replayClock, due, ERRAND_SECONDS } from './anim.mjs';
 import { createFeed } from './feed.mjs';
 
 const $ = s => document.querySelector(s);
 const feed = createFeed($('#feed'));
 const labels = $('#labels'), card = $('#card'), side = $('#side');
 const state = { data: null, world: null, selectedAgent: null, selectedIsland: null, hoverAgent: null, showDormant: false, expanded: new Set(), needsFit: true };
-const ui = { papers: [], hubGlow: 0 };
+const ui = { papers: [], errands: [], hubGlow: 0 };
 const bubbles = new Map();       // agent id -> { el, from, until }
 const islandLabels = new Map();  // island name -> element
 
 const LOOP_MS = 240e3;           // the last 24 hours replay in four minutes, then start over
 const MAX_PER_FRAME = 6;         // after a pause in the tab, don't flood the screen
+const MAX_BUBBLES = 5;           // speech bubbles on screen at once; the robots still run every errand
 const BUBBLE_S = 4.5, FLIGHT_S = 1.8;
 const t0 = performance.now(), seconds = () => (performance.now() - t0) / 1000;
 
@@ -108,14 +109,16 @@ function replay(t) {
     for (const e of fired) {
       const agent = state.world.agents.find(a => a.id === e.agentId); if (!agent) continue;
       let b = bubbles.get(e.agentId);
-      if (!b) { b = { el: el('div', 'bubble') }; labels.append(b.el); bubbles.set(e.agentId, b); }
-      b.el.textContent = e.text; b.el.className = `bubble ${e.result}`; b.from = t; b.until = t + BUBBLE_S;
+      if (!b && bubbles.size < MAX_BUBBLES) { b = { el: el('div', 'bubble') }; labels.append(b.el); bubbles.set(e.agentId, b); }
+      if (b) { b.el.textContent = e.text; b.el.className = `bubble ${e.result}`; b.from = t; b.until = t + BUBBLE_S; }
       ui.papers.push({ agentId: e.agentId, result: e.result, start: t, dur: FLIGHT_S });
+      ui.errands.push({ agentId: e.agentId, result: e.result, start: t });     // its robot walks the crate to the headquarters
       feed.add(e, agent.name);
     }
   }
   lastClock = clock;
   ui.papers = ui.papers.filter(p => t - p.start < p.dur + 0.1);
+  ui.errands = ui.errands.filter(e => t - e.start < ERRAND_SECONDS + 0.2);
   ui.hubGlow = ui.papers.some(p => { const k = (t - p.start) / p.dur; return k > 0.85 && k <= 1; }) ? 1 : Math.max(0, ui.hubGlow - 0.05);
 }
 
@@ -147,6 +150,9 @@ function tick() {
 
 // ----- pointer: the scene's controls handle orbit, pan and zoom; a click without movement selects
 if (scene) {
+  // keep the world centred in the space left of the side panel
+  const inset = () => scene.setInset(side.offsetWidth && getComputedStyle(side).display !== 'none' ? side.offsetWidth + 24 : 0);
+  inset(); addEventListener('resize', inset);
   let down = null;
   scene.element.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY, at: performance.now() }; });
   scene.element.addEventListener('pointermove', e => { pointer = { x: e.clientX, y: e.clientY }; });
