@@ -119,18 +119,25 @@ export function createScene(container) {
   new ResizeObserver(resize).observe(container); resize();
 
   // ----- camera
-  const overview = R => {
-    const vf = camera.fov * Math.PI / 180, hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
+  const overview = (R, centre = new THREE.Vector3()) => {
+    // frame the world inside the part of the view the side panel does not cover
+    const vf = camera.fov * Math.PI / 180, visible = Math.max(0.4, (S.size.w - (S.inset || 0)) / S.size.h), hf = 2 * Math.atan(Math.tan(vf / 2) * visible);
     const dist = (R * 1.05) / Math.tan(Math.min(vf, hf) / 2);
-    return { target: new THREE.Vector3(0, 0, 0), position: new THREE.Vector3(0, 0.62, 0.78).normalize().multiplyScalar(dist) };
+    return { target: centre.clone(), position: centre.clone().add(new THREE.Vector3(0, 0.62, 0.78).normalize().multiplyScalar(dist)) };
   };
   const glide = (target, position, seconds = 0.9) => {
     S.focus = { t0: performance.now(), dur: seconds * 1000, fromT: controls.target.clone(), fromP: camera.position.clone(), toT: target, toP: position };
   };
   function fit(instant = false) {
     if (!S.world) return;
-    const o = overview(S.world.bounds.radius * 0.9 + 2);   // the tilt foreshortens depth, so it can be framed closer
-    controls.maxDistance = o.position.length() * 2.2;
+    // centre on the real extent of the islands (the honeycomb is lopsided when the last ring is not full)
+    const cells = [{ x: 0, z: 0, radius: S.world.hub.radius }, ...S.world.islands];
+    const minX = Math.min(...cells.map(c => c.x - c.radius)), maxX = Math.max(...cells.map(c => c.x + c.radius));
+    const minZ = Math.min(...cells.map(c => c.z - c.radius)), maxZ = Math.max(...cells.map(c => c.z + c.radius));
+    const centre = new THREE.Vector3((minX + maxX) / 2, 0, (minZ + maxZ) / 2);
+    const reach = Math.max(...cells.map(c => Math.hypot(c.x - centre.x, c.z - centre.z) + c.radius));
+    const o = overview(reach * 0.78 + 2, centre);   // the tilt foreshortens depth, so it can be framed closer
+    controls.maxDistance = o.position.distanceTo(o.target) * 2.2 + 20;
     if (instant) { controls.target.copy(o.target); camera.position.copy(o.position); } else glide(o.target, o.position, 0.8);
   }
   function zoom(factor) {
