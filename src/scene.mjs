@@ -4,6 +4,8 @@
 import { THREE, STATUS, HEALTH, PALETTE, buildPod, buildRobot, buildingFor, buildHub, symbolSprite, workingIcon } from './models.mjs';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { panelSkin, solarSkin, crateSkin, fabricSkin, faceSkin } from './textures.mjs';
 import { tileOffsets } from './world.mjs';
 import { pose, hash, errand, routeBot } from './anim.mjs';
 
@@ -93,7 +95,10 @@ export function createScene(container) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.dampingFactor = 0.08; controls.maxPolarAngle = 1.38; controls.minDistance = 5;
 
-  scene.add(new THREE.HemisphereLight(0xdfeaff, 0xd9a56b, 0.95));
+  // a soft studio environment gives the metal, glass and plastic something to reflect, so they read as real materials
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.32;
+  scene.add(new THREE.HemisphereLight(0xdfeaff, 0xd9a56b, 0.8));
   const sun = new THREE.DirectionalLight(0xfff2dc, 2.9);
   sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
   scene.add(sun, sun.target);
@@ -147,7 +152,7 @@ export function createScene(container) {
 
   // ----- building the world
   function clear() {
-    S.root.traverse(o => { o.geometry?.dispose?.(); [].concat(o.material || []).forEach(m => { m.map?.dispose?.(); m.dispose(); }); });
+    S.root.traverse(o => { o.geometry?.dispose?.(); [].concat(o.material || []).forEach(m => { if (!m.map?.userData?.keep) m.map?.dispose?.(); m.dispose(); }); });
     S.root.clear(); S.agents.clear(); S.hqs.clear(); S.pickables = []; S.rocks = []; S.bots = null; S.papers.forEach(p => p.removeFromParent()); S.papers.clear();
   }
 
@@ -168,15 +173,15 @@ export function createScene(container) {
         else if (r < 0.8) tanks.push([x + (rnd() - 0.5) * 0.6, z + (rnd() - 0.5) * 0.6]);
       });
     });
-    const add = (geo, list, y, color, place) => {
+    const add = (geo, list, y, color, place, sk) => {
       if (!list.length) return;
-      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness: 0.45 }), list.length), m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), c = new THREE.Color();
+      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness: 0.5, map: sk.map, bumpMap: sk.bumpMap, bumpScale: 1.4 }), list.length), m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), c = new THREE.Color();
       list.forEach((p, i) => { place(p, e, i); q.setFromEuler(e); m.compose(new THREE.Vector3(p[0], y(p), p[1]), q, new THREE.Vector3(1, 1, 1)); im.setMatrixAt(i, m); im.setColorAt(i, c.setHex(color(p))); });
       im.castShadow = true; im.receiveShadow = true; S.root.add(im);
     };
-    add(panel, panels, () => 0.3, () => PALETTE.blue, (p, e) => e.set(-0.45, 0.3, 0));
-    add(crate, crates, () => 0.27, p => p[2], (p, e, i) => e.set(0, i * 0.7, 0));
-    add(tank, tanks, () => 0.32, () => PALETTE.white, (p, e) => e.set(0, 0, 0));
+    add(panel, panels, () => 0.3, () => PALETTE.blue, (p, e) => e.set(-0.45, 0.3, 0), solarSkin(0xffffff));
+    add(crate, crates, () => 0.27, p => p[2], (p, e, i) => e.set(0, i * 0.7, 0), crateSkin(0xf4f1ec));
+    add(tank, tanks, () => 0.32, () => PALETTE.white, (p, e) => e.set(0, 0, 0), panelSkin(0xffffff));
   }
 
   // Little workers shuttling between the buildings and each island's headquarters all day: out with a crate,
@@ -204,24 +209,40 @@ export function createScene(container) {
       for (let k = 0; k < 3; k++) route(isl, a.pos.x + (rnd() - 0.5) * 0.4, a.pos.z + 0.7, 0.2 + rnd() * 0.08, rnd() * 2);
     }
     if (!list.length) return;
-    const N = list.length, mat = () => new THREE.MeshStandardMaterial({ roughness: 0.5 }), white = () => new THREE.MeshStandardMaterial({ color: 0xf3f6ff, roughness: 0.5 });
+    // Each worker is dressed from a few stable picks (own random stream, so the routes above stay the same):
+    // skin tone, trousers, backpack, plus boots, belt, hard-hat brim, reflective vest stripe and hands.
+    const SKIN = [0xffd9b0, 0xeab98d, 0xc98f62, 0x9a6540, 0x6e4228], PANTS = [0x2e3550, 0x4a4036, 0x3a4a5a, 0x575a63, 0x3c3f2e], PACK = [0x4d5a3a, 0x8a5a2b, 0x394560, 0xb04a2e];
+    const dress = lcg(41);
+    list.forEach(b => { b.skin = SKIN[Math.floor(dress() * SKIN.length)]; b.pants = PANTS[Math.floor(dress() * PANTS.length)]; b.pack = PACK[Math.floor(dress() * PACK.length)]; b.scale = 0.94 + dress() * 0.14; });
+    const N = list.length, cloth = fabricSkin(), crateTex = crateSkin(0xf4f1ec), face = faceSkin();
+    const mat = (extra = {}) => new THREE.MeshStandardMaterial({ roughness: 0.5, ...extra });
+    const fabric = (rough = 0.8) => mat({ roughness: rough, map: cloth.map, bumpMap: cloth.bumpMap, bumpScale: 0.6 });
     const parts = {
-      body: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.085, 0.17, 3, 8), mat(), N),
-      head: new THREE.InstancedMesh(new THREE.SphereGeometry(0.105, 10, 8), white(), N),
-      hat: new THREE.InstancedMesh(new THREE.SphereGeometry(0.115, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2), mat(), N),
-      legs: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.032, 0.032, 0.24, 6), white(), N * 2),
-      arms: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.03, 0.12, 3, 6), mat(), N * 2),
-      crate: new THREE.InstancedMesh(new THREE.BoxGeometry(0.25, 0.25, 0.25), mat(), N),
+      body: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.085, 0.17, 3, 8), fabric(), N),
+      head: new THREE.InstancedMesh(new THREE.SphereGeometry(0.105, 12, 9), mat({ roughness: 0.55, map: face.map, bumpMap: face.bumpMap, bumpScale: 0.3 }), N),
+      hat: new THREE.InstancedMesh(new THREE.SphereGeometry(0.115, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2), mat({ roughness: 0.3, metalness: 0.1 }), N),
+      brim: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.135, 0.135, 0.012, 10), mat({ roughness: 0.3, metalness: 0.1 }), N),
+      legs: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.034, 0.03, 0.24, 6), fabric(), N * 2),
+      boots: new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.05, 0.11), mat({ roughness: 0.65, color: 0x2a211c }), N * 2),
+      arms: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.03, 0.12, 3, 6), fabric(), N * 2),
+      hands: new THREE.InstancedMesh(new THREE.SphereGeometry(0.034, 6, 5), mat({ roughness: 0.55 }), N * 2),
+      belt: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.089, 0.089, 0.03, 10), mat({ roughness: 0.6, color: 0x3a2e26 }), N),
+      stripe: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.0885, 0.0885, 0.026, 10), mat({ roughness: 0.25, metalness: 0.35, color: 0xdfe6f0, emissive: 0x28303a }), N),
+      pack: new THREE.InstancedMesh(new THREE.BoxGeometry(0.13, 0.17, 0.065), fabric(0.85), N),
+      crate: new THREE.InstancedMesh(new THREE.BoxGeometry(0.25, 0.25, 0.25), mat({ roughness: 0.7, map: crateTex.map, bumpMap: crateTex.bumpMap, bumpScale: 1.2 }), N),
     };
     const c = new THREE.Color();
     list.forEach((b, i) => {
-      parts.body.setColorAt(i, c.setHex(b.vest)); parts.hat.setColorAt(i, c.setHex(b.hat)); parts.crate.setColorAt(i, c.setHex(b.crate));
+      parts.body.setColorAt(i, c.setHex(b.vest)); parts.hat.setColorAt(i, c.setHex(b.hat)); parts.brim.setColorAt(i, c.setHex(b.hat)); parts.crate.setColorAt(i, c.setHex(b.crate));
+      parts.head.setColorAt(i, c.setHex(b.skin)); parts.pack.setColorAt(i, c.setHex(b.pack));
       parts.arms.setColorAt(i * 2, c.setHex(b.vest)); parts.arms.setColorAt(i * 2 + 1, c.setHex(b.vest));
+      parts.legs.setColorAt(i * 2, c.setHex(b.pants)); parts.legs.setColorAt(i * 2 + 1, c.setHex(b.pants));
+      parts.hands.setColorAt(i * 2, c.setHex(b.skin)); parts.hands.setColorAt(i * 2 + 1, c.setHex(b.skin));
     });
     // only the body and crate cast shadows; the many thin parts would just cost frames
     Object.entries(parts).forEach(([name, im]) => { im.castShadow = name === 'body' || name === 'crate'; S.root.add(im); });
     S.bots = { list, parts, base: new THREE.Matrix4(), local: new THREE.Matrix4(), out: new THREE.Matrix4(), q: new THREE.Quaternion(), qs: new THREE.Quaternion(),
-      p: new THREE.Vector3(), one: new THREE.Vector3(1, 1, 1), hide: new THREE.Vector3(0.001, 0.001, 0.001), ax: new THREE.Vector3(1, 0, 0) };
+      p: new THREE.Vector3(), sc: new THREE.Vector3(), one: new THREE.Vector3(1, 1, 1), hide: new THREE.Vector3(0.001, 0.001, 0.001), ax: new THREE.Vector3(1, 0, 0) };
   }
 
   function setWorld(world, { refit = false } = {}) {
@@ -387,7 +408,7 @@ export function createScene(container) {
     for (const hq of S.hqs.values()) hq.mats.ring.emissiveIntensity = 1.0 + Math.max(0, 1 - (t - hq.last) / 0.7) * 1.8;
 
     if (S.bots) {
-      const { list, parts, base, local, out, q, qs, p, one, hide, ax } = S.bots;
+      const { list, parts, base, local, out, q, qs, p, sc, one, hide, ax } = S.bots;
       // a part placed relative to the worker: translate to its joint, swing about x, then offset to the part's centre
       const put = (im, idx, x, y, z, swing, dy, scale = one) => {
         qs.setFromAxisAngle(ax, swing); local.compose(p.set(x, y, z), qs, scale);
@@ -400,16 +421,24 @@ export function createScene(container) {
         const px = x + (nx / nl) * sway, pz = z + (nz / nl) * sway, dir = w.forward ? 1 : -1;
         const gait = t * 10 + b.ph * 5, bob = Math.abs(Math.sin(gait)) * 0.03;
         q.setFromEuler(eul.set(0, Math.atan2((b.bx - b.ax) * dir, (b.bz - b.az) * dir), 0));
-        base.compose(p.set(px, 0.14 + bob, pz), q, one);
-        const swing = Math.sin(gait) * 0.7;
-        put(parts.body, i, 0, 0.38, 0, 0, 0);
+        base.compose(p.set(px, 0.14 + bob, pz), q, sc.setScalar(b.scale));
+        const swing = Math.sin(gait) * 0.7, lean = w.carrying ? -0.12 : 0;
+        put(parts.body, i, 0, 0.38, 0, lean, 0);
         put(parts.head, i, 0, 0.62, 0, 0, 0);
         put(parts.hat, i, 0, 0.64, 0, 0, 0);
+        put(parts.brim, i, 0, 0.652, 0.012, 0, 0);
         put(parts.legs, i * 2, -0.05, 0.25, 0, swing, -0.12);
         put(parts.legs, i * 2 + 1, 0.05, 0.25, 0, -swing, -0.12);
+        put(parts.boots, i * 2, -0.05, 0.25, 0, swing, -0.25);                       // boots follow the legs
+        put(parts.boots, i * 2 + 1, 0.05, 0.25, 0, -swing, -0.25);
+        put(parts.belt, i, 0, 0.33, 0, 0, 0);
+        put(parts.stripe, i, 0, 0.42, 0, lean, 0);
+        put(parts.pack, i, 0, 0.42, -0.105, lean, 0);
         const carry = w.carrying;       // arms hold the crate out in front, otherwise swing
         put(parts.arms, i * 2, -0.13, 0.46, 0, carry ? -1.2 : -swing, -0.07);
         put(parts.arms, i * 2 + 1, 0.13, 0.46, 0, carry ? -1.2 : swing, -0.07);
+        put(parts.hands, i * 2, -0.13, 0.46, 0, carry ? -1.2 : -swing, -0.165);
+        put(parts.hands, i * 2 + 1, 0.13, 0.46, 0, carry ? -1.2 : swing, -0.165);
         put(parts.crate, i, 0, 0.5, 0.19, 0, 0, carry ? one : hide);
         if (w.forward && w.u > 0.93) { const hq = S.hqs.get(b.isl); if (hq) hq.last = t; }
       });
