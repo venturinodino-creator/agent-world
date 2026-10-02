@@ -19,10 +19,11 @@ export const STATUS = {
 export const HEALTH = { ok: 0x2fd6a0, running: 0x3fd7e8, fail: 0xff6a3d, idle: 0xf2d24a, dormant: 0x5a6080 };
 const BOT = { workflow: 0xdbeaff, builder: 0xff7ab8, bot: 0xff5a5a, human: 0x3b72f2, local: 0xffa24a };
 
-const toy = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.05, ...extra });
+// Painted plastic and metal with a thin glossy clear coat, so edges catch a highlight like a rendered toy.
+const toy = (color, extra = {}) => new THREE.MeshPhysicalMaterial({ color, roughness: 0.5, metalness: 0.05, clearcoat: 0.3, clearcoatRoughness: 0.4, ...extra });
 const glow = (color, k = 1) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: k, roughness: 0.4 });
 // A surface with a procedural skin: the colour is baked into the map, a bump map gives the seams real relief.
-const skinned = (sk, extra = {}) => new THREE.MeshStandardMaterial({ map: sk.map, bumpMap: sk.bumpMap, bumpScale: 1.4, roughness: 0.55, metalness: 0.08, ...extra });
+const skinned = (sk, extra = {}) => new THREE.MeshPhysicalMaterial({ map: sk.map, bumpMap: sk.bumpMap, bumpScale: 1.4, roughness: 0.55, metalness: 0.08, clearcoat: 0.25, clearcoatRoughness: 0.45, ...extra });
 const DARK = 0x262b38;
 // Only parts big enough to matter cast a shadow; the many tiny ones would just cost frames.
 const mesh = (geo, mat, x = 0, y = 0, z = 0) => {
@@ -161,17 +162,17 @@ export function buildRobot(kind, name) {
   g.add(mesh(new THREE.CylinderGeometry(0.0815, 0.0815, 0.024, 12), toy(0xdfe6f0, { roughness: 0.25, metalness: 0.35, emissive: 0x28303a }), 0, 0.33, 0)); // vest stripe
   g.add(mesh(round(0.11, 0.14, 0.05, 0.015), skinned(cloth, { color: human ? 0x4d5a3a : 0x394560, roughness: 0.85 }), 0, 0.31, -0.095));       // backpack
   if (human) {
-    g.add(mesh(new THREE.SphereGeometry(0.095, 16, 12), skinned(faceSkin(), { color: 0xffd9b0, roughness: 0.55, bumpScale: 0.4 }), 0, 0.5, 0));
-    const hat = toy(color, { roughness: 0.3, metalness: 0.1 });
-    g.add(mesh(new THREE.SphereGeometry(0.105, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2), hat, 0, 0.52, 0));
-    g.add(mesh(new THREE.CylinderGeometry(0.125, 0.125, 0.012, 12), hat, 0, 0.525, 0.012));
+    g.add(mesh(new THREE.SphereGeometry(0.118, 20, 16), skinned(faceSkin(), { color: 0xffd9b0, roughness: 0.55, bumpScale: 0.4 }), 0, 0.52, 0));
+    const hat = toy(color, { roughness: 0.25, metalness: 0.1, clearcoat: 0.8, clearcoatRoughness: 0.12 });
+    g.add(mesh(new THREE.SphereGeometry(0.13, 16, 7, 0, Math.PI * 2, 0, Math.PI / 2), hat, 0, 0.55, 0));
+    g.add(mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.014, 14), hat, 0, 0.553, 0.014));
   } else {
-    g.add(mesh(new THREE.SphereGeometry(0.098, 18, 14), toy(PALETTE.white, { roughness: 0.2, metalness: 0.25 }), 0, 0.5, 0));
-    const visor = mesh(new THREE.SphereGeometry(0.075, 14, 10), toy(0x10151f, { roughness: 0.12, metalness: 0.7 }), 0, 0.5, 0.045); visor.scale.set(1.05, 0.7, 0.62); g.add(visor);
-    const eye = glow(0x59d6ff, 1.5);
-    for (const x of [-0.034, 0.034]) g.add(mesh(new THREE.SphereGeometry(0.016, 8, 6), eye, x, 0.505, 0.085));
-    g.add(mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.1, 6), metal, 0, 0.64, 0));
-    g.add(mesh(new THREE.SphereGeometry(0.026, 8, 6), glow(color, 1.2), 0, 0.7, 0));
+    g.add(mesh(new THREE.SphereGeometry(0.12, 22, 18), toy(PALETTE.white, { roughness: 0.18, metalness: 0.2, clearcoat: 0.9, clearcoatRoughness: 0.1 }), 0, 0.52, 0));
+    const visor = mesh(new THREE.SphereGeometry(0.095, 16, 12), toy(0x10151f, { roughness: 0.1, metalness: 0.7, clearcoat: 1, clearcoatRoughness: 0.05 }), 0, 0.52, 0.055); visor.scale.set(1.05, 0.7, 0.62); g.add(visor);
+    const eye = glow(0x59d6ff, 1.6);
+    for (const x of [-0.042, 0.042]) g.add(mesh(new THREE.SphereGeometry(0.019, 10, 8), eye, x, 0.525, 0.106));
+    g.add(mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.1, 6), metal, 0, 0.68, 0));
+    g.add(mesh(new THREE.SphereGeometry(0.028, 10, 8), glow(color, 1.3), 0, 0.74, 0));
   }
   // each arm hangs from a shoulder pivot, so swinging it looks like an arm and not a spinning stick
   const arms = [-1, 1].map(side => {

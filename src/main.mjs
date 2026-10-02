@@ -37,8 +37,15 @@ const t0 = performance.now(), seconds = () => (performance.now() - t0) / 1000;
 
 function message(text) { const b = $('#banner'); b.hidden = !text; b.textContent = text || ''; }
 
+// The render effects (ambient occlusion, bloom, tilt-shift) are on by default and drop out by themselves on a slow
+// machine. ?fx=1 or ?fx=0 forces them for a visit; the header button remembers the choice.
+const fxParam = new URLSearchParams(location.search).get('fx');
+let fxSaved = null;
+try { fxSaved = localStorage.getItem('world.fx'); } catch { /* storage blocked: automatic */ }
+const fxForce = fxParam === '1' ? true : fxParam === '0' ? false : fxSaved === 'on' ? true : fxSaved === 'off' ? false : null;
+const showFx = () => { $('#btnFx').textContent = 'fx: ' + (scene?.fxOn() ? 'on' : 'off'); };
 let scene = null;
-try { scene = (await import('./scene.mjs')).createScene($('#stage')); }
+try { scene = (await import('./scene.mjs')).createScene($('#stage'), { fx: fxForce, onFxAuto: showFx }); }
 catch { message('Could not load the 3D engine. It needs a connection to cdn.jsdelivr.net, so check your network and reload.'); }
 if (!scene && !$('#banner').textContent) message('This browser could not start WebGL, which the 3D world needs. Try a current Chrome, Edge, Firefox or Safari.');
 
@@ -197,6 +204,12 @@ if (scene) {
 
 const toggleDormant = () => { state.showDormant = !state.showDormant; state.needsFit = true; rebuild(); };
 $('#btnFit').onclick = $('#tbFit').onclick = () => scene?.fit();
+showFx();
+$('#btnFx').onclick = () => {
+  if (!scene) return;
+  const on = !scene.fxOn(); scene.setFx(on); showFx();
+  try { localStorage.setItem('world.fx', on ? 'on' : 'off'); } catch { /* storage blocked: the choice just is not remembered */ }
+};
 $('#btnDormant').onclick = $('#tbDormant').onclick = toggleDormant;
 $('#tbIn').onclick = () => scene?.zoom(0.7);
 $('#tbOut').onclick = () => scene?.zoom(1.4);

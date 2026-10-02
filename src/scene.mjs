@@ -6,6 +6,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { panelSkin, solarSkin, crateSkin, fabricSkin, faceSkin } from './textures.mjs';
+import { createPost } from './post.mjs';
+import { addBlob, blobGeometry, blobMaterial } from './grounding.mjs';
 import { tileOffsets } from './world.mjs';
 import { pose, hash, errand, routeBot } from './anim.mjs';
 
@@ -80,7 +82,9 @@ function rimGeometry(outer, width) {
 }
 
 // Returns null when the browser cannot start WebGL.
-export function createScene(container) {
+// `fx` is true or false to force the effects (ambient occlusion, bloom, tilt-shift) on or off, or null to start them
+// on and let them switch themselves off when the machine cannot keep up. `onFxAuto` hears about that switch-off.
+export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) {
   let renderer;
   try { renderer = new THREE.WebGLRenderer({ antialias: true }); } catch { return null; }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
@@ -97,11 +101,15 @@ export function createScene(container) {
 
   // a soft studio environment gives the metal, glass and plastic something to reflect, so they read as real materials
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.32;
-  scene.add(new THREE.HemisphereLight(0xdfeaff, 0xd9a56b, 0.8));
-  const sun = new THREE.DirectionalLight(0xfff2dc, 2.9);
-  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
-  scene.add(sun, sun.target);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.28;
+  // Lighting with contrast is what makes shapes look solid: a strong warm sun, a cool sky fill and a faint
+  // back-light that rims every figure. The darker shadow side is what the ambient occlusion pass then deepens.
+  scene.add(new THREE.HemisphereLight(0xcfe0ff, 0xd9a56b, 0.62));
+  const sun = new THREE.DirectionalLight(0xffefd2, 3.4);
+  const shadowSize = Math.min(4096, renderer.capabilities.maxTextureSize);
+  sun.castShadow = true; sun.shadow.mapSize.set(shadowSize, shadowSize); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.025; sun.shadow.radius = 3;
+  const rim = new THREE.DirectionalLight(0xaad0ff, 0.9); rim.position.set(-30, 18, -40);
+  scene.add(sun, sun.target, rim);
 
   const S = { world: null, root: new THREE.Group(), agents: new Map(), pickables: [], rocks: [], hub: null, focus: null, papers: new Map(),
     ring: null, bots: null, hqs: new Map(), hubTop: new THREE.Vector3(0, 6, 0), size: { w: 1, h: 1 } };
@@ -114,14 +122,16 @@ export function createScene(container) {
 
   function resize() {
     const w = container.clientWidth || 1, h = container.clientHeight || 1;
-    S.size = { w, h }; renderer.setSize(w, h); camera.aspect = w / h; applyInset();
+    S.size = { w, h }; renderer.setSize(w, h); camera.aspect = w / h; applyInset(); post?.setSize(w, h);
   }
   // Shifts the picture left so the world is centred in the part of the view that the side panel does not cover.
   function applyInset() {
     camera.setViewOffset(S.size.w, S.size.h, (S.inset || 0) / 2, 0, S.size.w, S.size.h); camera.updateProjectionMatrix();
   }
   const setInset = px => { S.inset = px; applyInset(); };
+  let post = null;
   new ResizeObserver(resize).observe(container); resize();
+  post = createPost(renderer, scene, camera, S.size.w, S.size.h, { on: fx !== false, auto: fx === null, onAuto: onFxAuto });
 
   // ----- camera
   const overview = (R, centre = new THREE.Vector3()) => {
@@ -219,9 +229,9 @@ export function createScene(container) {
     const fabric = (rough = 0.8) => mat({ roughness: rough, map: cloth.map, bumpMap: cloth.bumpMap, bumpScale: 0.6 });
     const parts = {
       body: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.085, 0.17, 3, 8), fabric(), N),
-      head: new THREE.InstancedMesh(new THREE.SphereGeometry(0.105, 12, 9), mat({ roughness: 0.55, map: face.map, bumpMap: face.bumpMap, bumpScale: 0.3 }), N),
-      hat: new THREE.InstancedMesh(new THREE.SphereGeometry(0.115, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2), mat({ roughness: 0.3, metalness: 0.1 }), N),
-      brim: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.135, 0.135, 0.012, 10), mat({ roughness: 0.3, metalness: 0.1 }), N),
+      head: new THREE.InstancedMesh(new THREE.SphereGeometry(0.122, 14, 10), mat({ roughness: 0.55, map: face.map, bumpMap: face.bumpMap, bumpScale: 0.3 }), N),
+      hat: new THREE.InstancedMesh(new THREE.SphereGeometry(0.134, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat({ roughness: 0.25, metalness: 0.1 }), N),
+      brim: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.155, 0.155, 0.012, 12), mat({ roughness: 0.25, metalness: 0.1 }), N),
       legs: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.034, 0.03, 0.24, 6), fabric(), N * 2),
       boots: new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.05, 0.11), mat({ roughness: 0.65, color: 0x2a211c }), N * 2),
       arms: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.03, 0.12, 3, 6), fabric(), N * 2),
@@ -230,7 +240,9 @@ export function createScene(container) {
       stripe: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.0885, 0.0885, 0.026, 10), mat({ roughness: 0.25, metalness: 0.35, color: 0xdfe6f0, emissive: 0x28303a }), N),
       pack: new THREE.InstancedMesh(new THREE.BoxGeometry(0.13, 0.17, 0.065), fabric(0.85), N),
       crate: new THREE.InstancedMesh(new THREE.BoxGeometry(0.25, 0.25, 0.25), mat({ roughness: 0.7, map: crateTex.map, bumpMap: crateTex.bumpMap, bumpScale: 1.2 }), N),
+      blob: new THREE.InstancedMesh(blobGeometry(0.17), blobMaterial(0.5), N),   // contact shadow under each worker
     };
+    parts.blob.renderOrder = 1;
     const c = new THREE.Color();
     list.forEach((b, i) => {
       parts.body.setColorAt(i, c.setHex(b.vest)); parts.hat.setColorAt(i, c.setHex(b.hat)); parts.brim.setColorAt(i, c.setHex(b.hat)); parts.crate.setColorAt(i, c.setHex(b.crate));
@@ -270,7 +282,7 @@ export function createScene(container) {
       const h = isl.health;
       addPlate(isl, h, HEALTH[h] ?? HEALTH.ok, isl.dormant ? 0.1 : 0.5);
       const hq = buildPod(isl.dormant ? 'asleep' : h === 'fail' ? 'fail' : 'ok', isl.dormant ? 1.4 : 1.75);
-      hq.position.set(isl.x, 0.12, isl.z); hq.userData.island = isl.name; root.add(hq); S.pickables.push(hq);
+      hq.position.set(isl.x, 0.12, isl.z); hq.userData.island = isl.name; root.add(hq); S.pickables.push(hq); addBlob(hq, 0.75, 0.05, 0.6);
       S.hqs.set(isl.name, { mats: hq.userData.mats, last: -9 });
       tileOffsets(isl.rings).forEach((t, i) => { if (i <= isl.agentCount) pads.push([isl.x + t.x, isl.z + t.z, i === 0 ? 1.7 : 1, FLOOR[h]?.[0] ?? FLOOR.ok[0]]); });
     });
@@ -286,9 +298,9 @@ export function createScene(container) {
       const building = buildingFor(a, a.status, ph); building.position.set(a.pos.x, 0.14, a.pos.z);
       building.rotation.y = Math.floor(ph * 8) * (Math.PI / 4);
       building.scale.setScalar(1.2);   // chunky, like the reference
-      building.userData.agentId = a.id;
+      building.userData.agentId = a.id; addBlob(building, 0.72, 0.05, 0.55);
       const robot = buildRobot(a.kind, a.name); robot.position.set(a.pos.x, 0.14, a.pos.z + 0.7);
-      robot.scale.setScalar(1.5); robot.userData.agentId = a.id;
+      robot.scale.setScalar(1.5); robot.userData.agentId = a.id; addBlob(robot, 0.2, 0.05, 0.55);
       const carry = new THREE.Mesh(new RoundedBoxGeometry(0.2, 0.2, 0.2, 2, 0.04), new THREE.MeshStandardMaterial({ color: PALETTE.red, roughness: 0.45 }));
       carry.position.set(0, 0.8, 0); carry.visible = false; robot.add(carry);
       const sparks = a.status === 'running' ? Array.from({ length: 6 }, () => { const sp = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), new THREE.MeshBasicMaterial({ color: 0xfff1a8 })); root.add(sp); return sp; }) : [];
@@ -423,10 +435,11 @@ export function createScene(container) {
         q.setFromEuler(eul.set(0, Math.atan2((b.bx - b.ax) * dir, (b.bz - b.az) * dir), 0));
         base.compose(p.set(px, 0.14 + bob, pz), q, sc.setScalar(b.scale));
         const swing = Math.sin(gait) * 0.7, lean = w.carrying ? -0.12 : 0;
+        put(parts.blob, i, 0, 0.055, 0, 0, 0);
         put(parts.body, i, 0, 0.38, 0, lean, 0);
-        put(parts.head, i, 0, 0.62, 0, 0, 0);
-        put(parts.hat, i, 0, 0.64, 0, 0, 0);
-        put(parts.brim, i, 0, 0.652, 0.012, 0, 0);
+        put(parts.head, i, 0, 0.64, 0, 0, 0);
+        put(parts.hat, i, 0, 0.665, 0, 0, 0);
+        put(parts.brim, i, 0, 0.677, 0.014, 0, 0);
         put(parts.legs, i * 2, -0.05, 0.25, 0, swing, -0.12);
         put(parts.legs, i * 2 + 1, 0.05, 0.25, 0, -swing, -0.12);
         put(parts.boots, i * 2, -0.05, 0.25, 0, swing, -0.25);                       // boots follow the legs
@@ -465,9 +478,10 @@ export function createScene(container) {
       tmp.set(r.bx, 1.1, r.bz).lerp(S.hubTop, e); tmp.y += Math.sin(k * Math.PI) * 2.2;
       mm.position.copy(tmp); mm.rotation.set(0, t * 6, Math.sin(t * 8) * 0.4); mm.scale.setScalar(1 - k * 0.35);
     }
-    renderer.render(scene, camera);
+    post.tick(performance.now());
+    post.render();
   }
 
-  return { setWorld, update, pick, project, agentHead, islandLabel, focusAgent, focusIsland, fit, zoom, setInset, nearAgents, cameraDistance, hasAgent: id => S.agents.has(id),
+  return { setFx: on => post.setEnabled(on), fxOn: () => post.enabled, setWorld, update, pick, project, agentHead, islandLabel, focusAgent, focusIsland, fit, zoom, setInset, nearAgents, cameraDistance, hasAgent: id => S.agents.has(id),
     element: renderer.domElement };
 }

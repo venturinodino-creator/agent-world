@@ -14,6 +14,8 @@ so it shows exactly the repos that dashboard shows and never changes it.
 ## Using it
 
 - **Drag** to orbit, **right-drag** to pan, **wheel** to zoom, **fit** to frame the whole world again.
+- **fx** switches the render effects (ambient occlusion, bloom, depth blur) on or off. They start on and turn themselves
+  off if the machine cannot keep up; the button remembers your choice. `?fx=1` or `?fx=0` forces them for one visit.
 - **Click** a tower or robot (or an entry in the list on the right): the camera glides to it and a card shows
   what it is, its latest result, recent runs and an **Open** button to GitHub.
 - **dormant** shows quiet repos (30+ days) as small, dark, closed islands.
