@@ -143,21 +143,43 @@ export function buildDish(status) {
 }
 
 // The little character that works at a building. Arms are kept so they can swing while typing.
+// A fully dressed little character: dyed work clothes with a reflective vest stripe, belt, backpack, trousers, boots
+// and hands. People get a face and a hard hat in their colour; the machines (workflows, Claude, the bot, Cowork)
+// get a glossy white helmet with a dark visor, glowing eyes and an antenna.
 export function buildRobot(kind, name) {
   const color = kind === 'builder' ? (name === 'Auto-commit bot' ? BOT.bot : BOT.builder) : BOT[kind] || BOT.workflow;
   const cloth = fabricSkin(), human = kind === 'human';
-  const g = new THREE.Group(), body = skinned(cloth, { color, roughness: 0.7, bumpScale: 0.6 }), white = toy(PALETTE.white, { metalness: 0.3, roughness: 0.4 });
-  for (const x of [-0.04, 0.04]) g.add(mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.2, 6), white, x, 0.1, 0));
+  const g = new THREE.Group(), body = skinned(cloth, { color, roughness: 0.7, bumpScale: 0.6 });
+  const trousers = skinned(cloth, { color: 0x333a52, roughness: 0.8, bumpScale: 0.6 }), boot = toy(0x2a211c, { roughness: 0.65 });
+  const skinTone = toy(0xffd9b0, { roughness: 0.55 }), metal = toy(PALETTE.white, { metalness: 0.4, roughness: 0.35 });
+  for (const x of [-0.04, 0.04]) {
+    g.add(mesh(new THREE.CylinderGeometry(0.03, 0.026, 0.2, 8), trousers, x, 0.1, 0));
+    g.add(mesh(new THREE.BoxGeometry(0.058, 0.045, 0.1), boot, x, 0.022, 0.012));
+  }
   g.add(mesh(new THREE.CapsuleGeometry(0.08, 0.12, 6, 12), body, 0, 0.3, 0));
-  const head = human ? skinned(faceSkin(), { color: 0xffd9b0, roughness: 0.55, bumpScale: 0.4 }) : toy(PALETTE.white, { roughness: 0.35, metalness: 0.3 });
-  g.add(mesh(new THREE.SphereGeometry(0.095, 16, 12), head, 0, 0.5, 0));
-  if (!human) {
-    const eye = glow(0x59d6ff, 1.4);
-    for (const x of [-0.035, 0.035]) g.add(mesh(new THREE.SphereGeometry(0.018, 8, 6), eye, x, 0.51, 0.082));
-    g.add(mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.1, 6), white, 0, 0.64, 0));
+  g.add(mesh(new THREE.CylinderGeometry(0.0825, 0.0825, 0.028, 12), toy(0x3a2e26, { roughness: 0.6 }), 0, 0.215, 0));                      // belt
+  g.add(mesh(new THREE.CylinderGeometry(0.0815, 0.0815, 0.024, 12), toy(0xdfe6f0, { roughness: 0.25, metalness: 0.35, emissive: 0x28303a }), 0, 0.33, 0)); // vest stripe
+  g.add(mesh(round(0.11, 0.14, 0.05, 0.015), skinned(cloth, { color: human ? 0x4d5a3a : 0x394560, roughness: 0.85 }), 0, 0.31, -0.095));       // backpack
+  if (human) {
+    g.add(mesh(new THREE.SphereGeometry(0.095, 16, 12), skinned(faceSkin(), { color: 0xffd9b0, roughness: 0.55, bumpScale: 0.4 }), 0, 0.5, 0));
+    const hat = toy(color, { roughness: 0.3, metalness: 0.1 });
+    g.add(mesh(new THREE.SphereGeometry(0.105, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2), hat, 0, 0.52, 0));
+    g.add(mesh(new THREE.CylinderGeometry(0.125, 0.125, 0.012, 12), hat, 0, 0.525, 0.012));
+  } else {
+    g.add(mesh(new THREE.SphereGeometry(0.098, 18, 14), toy(PALETTE.white, { roughness: 0.2, metalness: 0.25 }), 0, 0.5, 0));
+    const visor = mesh(new THREE.SphereGeometry(0.075, 14, 10), toy(0x10151f, { roughness: 0.12, metalness: 0.7 }), 0, 0.5, 0.045); visor.scale.set(1.05, 0.7, 0.62); g.add(visor);
+    const eye = glow(0x59d6ff, 1.5);
+    for (const x of [-0.034, 0.034]) g.add(mesh(new THREE.SphereGeometry(0.016, 8, 6), eye, x, 0.505, 0.085));
+    g.add(mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.1, 6), metal, 0, 0.64, 0));
     g.add(mesh(new THREE.SphereGeometry(0.026, 8, 6), glow(color, 1.2), 0, 0.7, 0));
   }
-  const arms = [-1, 1].map(side => { const a = mesh(new THREE.CapsuleGeometry(0.022, 0.1, 4, 8), body, side * 0.115, 0.3, 0); g.add(a); return a; });
+  // each arm hangs from a shoulder pivot, so swinging it looks like an arm and not a spinning stick
+  const arms = [-1, 1].map(side => {
+    const shoulder = new THREE.Group(); shoulder.position.set(side * 0.115, 0.38, 0);
+    shoulder.add(mesh(new THREE.CapsuleGeometry(0.024, 0.1, 4, 8), body, 0, -0.07, 0));
+    shoulder.add(mesh(new THREE.SphereGeometry(0.03, 8, 6), human ? skinTone : metal, 0, -0.15, 0));
+    g.add(shoulder); return shoulder;
+  });
   g.userData = { arms, body };
   return g;
 }
