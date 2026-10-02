@@ -19,6 +19,11 @@
 <main>
   <canvas id="world" aria-label="Pixel-art world of repos and their agents"></canvas>
   <aside class="panel" id="panel" hidden></aside>
+  <section class="feed" id="feed" aria-label="Activity feed">
+    <div class="ph"><span>Activity · last 24h replay</span></div>
+    <p class="empty" hidden>Quiet day: no commits or runs in the last 24 hours.</p>
+    <ul class="feed-list"></ul>
+  </section>
 </main>
 <script type="module" src="src/main.mjs"></script>
 </body>

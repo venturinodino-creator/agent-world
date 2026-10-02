@@ -122,7 +122,10 @@ test('events are the last 24 hours, oldest first, and belong to existing agents'
   assert.deepEqual(w.events.map(e => e.time), [iso(10), iso(3), iso(1)]);
   assert.deepEqual(w.events.map(e => e.kind), ['run', 'run', 'commit']);
   assert.equal(w.events[0].result, 'fail');
+  assert.equal(w.events[0].text, 'Deploy: failed', 'the bubble names the workflow');
+  assert.equal(w.events[0].detail, 'failed', 'the feed already shows the name, so it shows only the result');
   assert.equal(w.events[2].text, 'fresh work');
+  assert.equal(w.events[2].detail, 'fresh work');
   const ids = new Set(w.agents.map(x => x.id));
   assert.ok(w.events.every(e => ids.has(e.agentId)));
 });

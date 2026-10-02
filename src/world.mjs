@@ -117,13 +117,13 @@ export function buildWorld(data, config = {}, now = Date.now(), opts = {}) {
     for (const w of r.workflows) {
       for (const run of (w.runs && w.runs.length ? w.runs : [w])) {
         if (now - ms(run.date) > DAY || !byId.has(`${r.name}::${w.name}`)) continue;
-        events.push({ time: run.date, kind: 'run', agentId: `${r.name}::${w.name}`, room: r.name, text: `${w.name}: ${runResult(run)}`, result: eventResult(runStatus(run)), url: run.url });
+        events.push({ time: run.date, kind: 'run', agentId: `${r.name}::${w.name}`, room: r.name, text: `${w.name}: ${runResult(run)}`, detail: runResult(run), result: eventResult(runStatus(run)), url: run.url });
       }
     }
     for (const c of r.commits) {
       const name = c.who === 'claude' ? 'Claude · builder' : c.who === 'bot' ? 'Auto-commit bot' : 'You';
       if (now - ms(c.date) > DAY || !byId.has(`${r.name}::${name}`)) continue;
-      events.push({ time: c.date, kind: 'commit', agentId: `${r.name}::${name}`, room: r.name, text: c.msg, result: 'ok', url: c.url });
+      events.push({ time: c.date, kind: 'commit', agentId: `${r.name}::${name}`, room: r.name, text: c.msg, detail: c.msg, result: 'ok', url: c.url });
     }
   }
   events.sort((a, b) => ms(a.time) - ms(b.time) || (a.agentId < b.agentId ? -1 : 1));
