@@ -27,6 +27,7 @@ const bubbles = new Map();       // agent id -> { el, from, until }
 const islandLabels = new Map();  // island name -> element
 const nameTags = new Map();      // agent id -> name tag shown when zoomed in
 const NEAR_DISTANCE = 26;        // camera distance under which name tags appear
+const MAX_TAGS = 5;              // name tags shown at once
 
 const LOOP_MS = 240e3;           // the last 24 hours replay in four minutes, then start over
 const MAX_PER_FRAME = 6;         // after a pause in the tab, don't flood the screen
@@ -154,7 +155,10 @@ function tick() {
       place(b.el, scene.agentHead(id), -16); b.el.style.opacity = String(Math.max(0, Math.min(1, (t - b.from) * 5, (b.until - t) * 2.5)));
     }
     // zoomed in: a name tag over the agents nearest the middle of the view, so you can see who is doing what
-    const near = scene.cameraDistance() < NEAR_DISTANCE ? new Set(scene.nearAgents(11, 10)) : new Set();
+    // only a handful, working agents first, so busy islands stay readable
+    const working = id => (state.world.agents.find(x => x.id === id)?.status === 'running' ? 1 : 0);
+    const near = scene.cameraDistance() < NEAR_DISTANCE
+      ? new Set(scene.nearAgents(11, 16).sort((a, b) => working(b) - working(a)).slice(0, MAX_TAGS)) : new Set();
     for (const [id, tag] of nameTags) if (!near.has(id) || id === state.selectedAgent) { tag.remove(); nameTags.delete(id); }
     for (const id of near) {
       if (id === state.selectedAgent) continue;
