@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agent World</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand">AGENT_WORLD</div>
+  <div class="grow"></div>
+  <span class="meta" id="meta"></span>
+  <button class="btn" id="btnDormant">dormant: hidden</button>
+  <button class="btn" id="btnFit">fit</button>
+  <span class="meta" id="sync">loading…</span>
+</header>
+<div class="banner" id="banner" hidden></div>
+<main>
+  <canvas id="world" aria-label="Pixel-art world of repos and their agents"></canvas>
+  <aside class="panel" id="panel" hidden></aside>
+</main>
+<script type="module" src="src/main.mjs"></script>
+</body>
+</html>
