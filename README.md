@@ -4,6 +4,11 @@ A pixel-art world where the agents behind my GitHub repos live and work. Each ac
 GitHub Actions workflow, Claude as builder, me, and each Cowork/local agent is a little character at a desk.
 Click a character to see what it last did.
 
+What you see comes from real data: running agents type, healthy ones idle and wander, failing ones pace under
+a flashing alarm, scheduled Cowork agents sleep. The last 24 hours of commits and workflow runs replay on a
+four-minute loop: a speech bubble pops up over the agent involved, a page flies to the hub, and the activity
+feed lists it.
+
 It is an experiment. It only reads the public `data.json` that the `agent-hq` dashboard publishes (read-only),
 so it shows exactly the repos that dashboard shows and never changes it.
 
