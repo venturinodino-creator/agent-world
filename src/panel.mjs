@@ -46,7 +46,7 @@ export function renderPanel(root, agent, onClose, now = Date.now()) {
     }
     body.append(grid);
     body.append(el('div', 'sec', agent.kind === 'workflow' ? 'Recent runs' : 'Recent commits'));
-    const list = el('ul', 'feed');
+    const list = el('ul', 'runs');
     for (const it of d.recent) {
       const li = el('li'), line = el('span', 'm'), url = safeUrl(it.url);
       const label = it.result || it.text;
@@ -57,7 +57,7 @@ export function renderPanel(root, agent, onClose, now = Date.now()) {
     body.append(list);
   }
   const links = el('div', 'links'), repoUrl = safeUrl(agent.url);
-  if (repoUrl) links.append(link(agent.kind === 'workflow' ? '↗ latest run on GitHub' : '↗ repo', repoUrl));
+  if (repoUrl) links.append(link(agent.kind === 'workflow' ? 'Open latest run' : 'Open repo', repoUrl));
   if (links.childNodes.length) body.append(links);
   root.append(head, body);
 }

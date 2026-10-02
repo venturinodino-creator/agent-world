@@ -1,17 +1,19 @@
-// The world model: turns the published agent data, a small local config and the current time
-// into rooms, agents and recent events. Pure (no DOM, no network), so the same input always
-// gives the same world and it can be tested without a browser. Units are tiles.
+// The world model: turns the published agent data, a small local config and the current time into
+// hexagon islands (one per repo), the agents standing on them and the recent events. Pure (no DOM, no
+// network), so the same input always gives the same world and it can be tested without a browser.
+// Positions are on the ground plane (x, z) in tile sizes; a tile is a hexagon with circumradius 1.
 export const DAY = 864e5;
 const DORMANT_DAYS = 30;     // matches the agent-hq legend: dormant = quiet for more than 30 days
 const RUNNING_WINDOW = 30 * 60e3;   // a commit this fresh means the committer is working right now
-const RECENT = 5;            // recent items kept per agent for the detail panel
+const RECENT = 5;            // recent items kept per agent for the detail card
 
-const DESK = 5, PAD_X = 2, HEADER = 3, PAD_BOTTOM = 2;   // room layout
-const GAP = 3, MARGIN = 4, HUB = 8;                       // spacing between rooms, world edge, hub size
-const CLOSED = { w: 12, h: 8 };                           // dormant and empty rooms
+const SQRT3 = Math.sqrt(3);
+const GAP = 2, HUB_RADIUS = 3;        // spacing between islands, size of the hub tower's base
+const HEX_DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 
 const byName = (a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
 const ms = iso => new Date(iso).getTime();
+const round = v => Math.round(v * 1000) / 1000;
 
 export function runResult(run) {
   if (run.status !== 'completed') return 'running';
@@ -20,6 +22,8 @@ export function runResult(run) {
 const runStatus = run => (run.status !== 'completed' ? 'running' : run.concl === 'failure' ? 'fail' : run.concl === 'success' ? 'ok' : 'idle');
 const eventResult = status => (status === 'fail' ? 'fail' : status === 'running' ? 'running' : 'ok');
 const LOCAL_STATUS = { scheduled: 'asleep', running: 'running', fail: 'fail', ok: 'ok', idle: 'idle' };
+const runDetail = run => ({ result: runResult(run), date: run.date, event: run.event, url: run.url });
+const LOCAL_NOTE = 'Not tracked live: this agent is listed by hand, GitHub cannot see its runs.';
 
 function agentsOf(r, localAgents, now) {
   const out = [];
@@ -36,42 +40,58 @@ function agentsOf(r, localAgents, now) {
     out.push({ id: `${r.name}::${name}`, name, kind, status: now - ms(mine[0].date) < RUNNING_WINDOW ? 'running' : 'ok',
       repo: r.name, url: r.url, details: { latest: recent[0], recent, count: mine.length } });
   }
-  for (const a of localAgents) {
-    out.push({ id: `${r.name}::${a.name}`, name: a.name, kind: 'local', status: LOCAL_STATUS[a.status] || 'asleep', repo: r.name,
-      url: null, details: { schedule: a.schedule || '', role: a.role || '', note: 'Not tracked live: this agent is listed by hand, GitHub cannot see its runs.' } });
-  }
+  for (const a of localAgents) out.push(localAgent(a, r.name, r.name));
   return out;
 }
-const runDetail = run => ({ result: runResult(run), date: run.date, event: run.event, url: run.url });
 
-function roomSize(n) {
-  if (!n) return { ...CLOSED, cols: 0 };
-  const cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols);
-  return { w: cols * DESK + 2 * PAD_X, h: HEADER + rows * DESK + PAD_BOTTOM, cols };
+const localAgent = (a, repo, islandName) => ({ id: `${islandName}::${a.name}`, name: a.name, kind: 'local', status: LOCAL_STATUS[a.status] || 'asleep',
+  repo, url: null, details: { schedule: a.schedule || '', role: a.role || '', note: LOCAL_NOTE } });
+
+// ----- hexagon islands
+// Tiles are pointy-top hexagons in axial coordinates; tile 0 is the headquarters in the middle and the
+// rest spiral outwards ring by ring.
+function spiral(count) {
+  const out = [[0, 0]];
+  for (let k = 1; out.length < count; k++) {
+    let q = -k, r = k;
+    for (let side = 0; side < 6; side++) for (let j = 0; j < k; j++) { out.push([q, r]); q += HEX_DIRS[side][0]; r += HEX_DIRS[side][1]; }
+  }
+  return out.slice(0, count);
+}
+const tileXZ = ([q, r]) => ({ x: SQRT3 * (q + r / 2), z: 1.5 * r });
+// Every tile of an island with this many rings, as offsets from its centre (the renderer draws them all).
+export const tileOffsets = rings => spiral(1 + 3 * rings * (rings + 1)).map(tileXZ);
+const ringsFor = agents => { let rings = 1; while (1 + 3 * rings * (rings + 1) < agents + 1) rings++; return rings; };
+const islandRadius = rings => SQRT3 * rings + 1.3;
+
+function healthOf(agents) {
+  if (agents.some(a => a.status === 'fail')) return 'fail';
+  if (agents.some(a => a.status === 'running')) return 'running';
+  return agents.some(a => a.status === 'ok') ? 'ok' : 'idle';
 }
 
-const apart = (p, q, gap) => p.x + p.w + gap <= q.x || q.x + q.w + gap <= p.x || p.y + p.h + gap <= q.y || q.y + q.h + gap <= p.y;
+const apart = (c, others) => others.every(o => Math.hypot(c.x - o.x, c.z - o.z) >= c.radius + o.radius + GAP);
 
-// Rooms sit on a ring around the hub; the ring grows until nothing touches anything in `avoid`.
-function ring(rooms, avoid, start) {
-  const n = rooms.length;
+// Islands sit on a ring around the hub; the ring grows until nothing touches anything in `avoid`.
+function ring(islands, avoid, start) {
+  const n = islands.length;
   if (!n) return [];
-  for (let radius = start; ; radius++) {
-    const placed = rooms.map((r, i) => {
+  for (let rho = start; ; rho += 0.5) {
+    const placed = islands.map((isl, i) => {
       const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
-      return { x: Math.round(radius * Math.cos(a) - r.w / 2), y: Math.round(radius * Math.sin(a) - r.h / 2), w: r.w, h: r.h };
+      return { x: round(rho * Math.cos(a)), z: round(rho * Math.sin(a)), radius: isl.radius };
     });
-    if (placed.every((p, i) => avoid.every(b => apart(p, b, GAP)) && placed.slice(i + 1).every(q => apart(p, q, GAP)))) return placed;
+    if (placed.every((p, i) => apart(p, avoid) && apart(p, placed.slice(i + 1)))) return placed;
   }
 }
 
-// Live rooms take the inner ring; closed (dormant) rooms get an outer ring so they never crowd the live ones.
-function placeOnRing(rooms) {
-  const hub = { x: -HUB / 2, y: -HUB / 2, w: HUB, h: HUB };
-  const live = rooms.filter(r => !r.dormant), closed = rooms.filter(r => r.dormant);
-  const inner = ring(live, [hub], HUB);
-  const reach = Math.max(HUB, ...inner.map(p => Math.max(Math.abs(p.x), Math.abs(p.y), Math.abs(p.x + p.w), Math.abs(p.y + p.h))));
-  const outer = ring(closed, [hub, ...inner], reach + GAP + CLOSED.h);
+// Live islands take the inner ring; closed (dormant) ones get an outer ring so they never crowd the live ones.
+function layout(islands) {
+  const hub = { x: 0, z: 0, radius: HUB_RADIUS };
+  const live = islands.filter(i => !i.dormant), closed = islands.filter(i => i.dormant);
+  const inner = ring(live, [hub], HUB_RADIUS + GAP + Math.max(0, ...live.map(i => i.radius)));
+  const reach = Math.max(HUB_RADIUS, ...inner.map(p => Math.hypot(p.x, p.z) + p.radius));
+  const outer = ring(closed, [hub, ...inner], reach + GAP + Math.max(0, ...closed.map(i => i.radius)));
   return { hub, placed: [...inner, ...outer] };
 }
 
@@ -81,34 +101,28 @@ export function buildWorld(data, config = {}, now = Date.now(), opts = {}) {
   const locals = (config.localAgents || []).filter(a => !a.repo || present.has(a.repo));
   const isDormant = r => (now - ms(r.pushed)) / DAY > DORMANT_DAYS;
 
-  const rooms = [], agents = [];
-  for (const r of repos.filter(x => !isDormant(x))) {
-    const list = agentsOf(r, locals.filter(a => a.repo === r.name), now);
-    rooms.push({ name: r.name, repo: r.name, url: r.url, dormant: false, agentCount: list.length, ...roomSize(list.length) });
-    list.forEach(a => agents.push({ ...a, room: r.name }));
-  }
+  const islands = [], agents = [];
+  const addIsland = (name, repo, url, list) => {
+    const rings = ringsFor(list.length);
+    islands.push({ name, repo, url, dormant: false, agentCount: list.length, rings, radius: round(islandRadius(rings)), health: healthOf(list) });
+    list.forEach(a => agents.push({ ...a, island: name }));
+  };
+  for (const r of repos.filter(x => !isDormant(x))) addIsland(r.name, r.name, r.url, agentsOf(r, locals.filter(a => a.repo === r.name), now));
   const lobby = locals.filter(a => !a.repo);
-  if (lobby.length) {
-    rooms.push({ name: 'Lobby', repo: null, url: null, dormant: false, agentCount: lobby.length, ...roomSize(lobby.length) });
-    lobby.forEach(a => agents.push({ id: `Lobby::${a.name}`, name: a.name, kind: 'local', status: LOCAL_STATUS[a.status] || 'asleep', room: 'Lobby', repo: null,
-      url: null, details: { schedule: a.schedule || '', role: a.role || '', note: 'Not tracked live: this agent is listed by hand, GitHub cannot see its runs.' } }));
-  }
+  if (lobby.length) addIsland('Lobby', null, null, lobby.map(a => localAgent(a, null, 'Lobby')));
   if (opts.showDormant) {
-    for (const r of repos.filter(isDormant)) rooms.push({ name: r.name, repo: r.name, url: r.url, dormant: true, agentCount: 0, ...CLOSED, cols: 0 });
+    for (const r of repos.filter(isDormant)) islands.push({ name: r.name, repo: r.name, url: r.url, dormant: true, agentCount: 0, rings: 1, radius: round(islandRadius(1)), health: 'dormant' });
   }
 
-  const { hub, placed } = placeOnRing(rooms);
-  const boxes = [hub, ...placed];
-  const minX = Math.min(...boxes.map(b => b.x)), minY = Math.min(...boxes.map(b => b.y));
-  const dx = MARGIN - minX, dy = MARGIN - minY;
-  rooms.forEach((r, i) => { r.x = placed[i].x + dx; r.y = placed[i].y + dy; });
-  const shiftedHub = { x: hub.x + dx, y: hub.y + dy, w: HUB, h: HUB };
+  const { hub, placed } = layout(islands);
+  islands.forEach((isl, i) => { isl.x = placed[i].x; isl.z = placed[i].z; });
 
-  const seat = new Map();
+  const tiles = new Map(islands.map(i => [i.name, spiral(i.agentCount + 1)])), used = new Map();
   for (const a of agents) {
-    const room = rooms.find(r => r.name === a.room), i = seat.get(a.room) || 0;
-    seat.set(a.room, i + 1);
-    a.desk = { x: room.x + PAD_X + (i % room.cols) * DESK + DESK / 2, y: room.y + HEADER + Math.floor(i / room.cols) * DESK + DESK / 2 };
+    const isl = islands.find(i => i.name === a.island), n = (used.get(a.island) || 0) + 1;
+    used.set(a.island, n);
+    const t = tileXZ(tiles.get(a.island)[n]);   // tile 0 is the headquarters, agents take tiles 1, 2, 3…
+    a.pos = { x: round(isl.x + t.x), z: round(isl.z + t.z) };
   }
 
   const events = [];
@@ -117,17 +131,17 @@ export function buildWorld(data, config = {}, now = Date.now(), opts = {}) {
     for (const w of r.workflows) {
       for (const run of (w.runs && w.runs.length ? w.runs : [w])) {
         if (now - ms(run.date) > DAY || !byId.has(`${r.name}::${w.name}`)) continue;
-        events.push({ time: run.date, kind: 'run', agentId: `${r.name}::${w.name}`, room: r.name, text: `${w.name}: ${runResult(run)}`, detail: runResult(run), result: eventResult(runStatus(run)), url: run.url });
+        events.push({ time: run.date, kind: 'run', agentId: `${r.name}::${w.name}`, island: r.name, text: `${w.name}: ${runResult(run)}`, detail: runResult(run), result: eventResult(runStatus(run)), url: run.url });
       }
     }
     for (const c of r.commits) {
       const name = c.who === 'claude' ? 'Claude · builder' : c.who === 'bot' ? 'Auto-commit bot' : 'You';
       if (now - ms(c.date) > DAY || !byId.has(`${r.name}::${name}`)) continue;
-      events.push({ time: c.date, kind: 'commit', agentId: `${r.name}::${name}`, room: r.name, text: c.msg, detail: c.msg, result: 'ok', url: c.url });
+      events.push({ time: c.date, kind: 'commit', agentId: `${r.name}::${name}`, island: r.name, text: c.msg, detail: c.msg, result: 'ok', url: c.url });
     }
   }
   events.sort((a, b) => ms(a.time) - ms(b.time) || (a.agentId < b.agentId ? -1 : 1));
 
-  const maxX = Math.max(...boxes.map(b => b.x + dx + b.w)), maxY = Math.max(...boxes.map(b => b.y + dy + b.h));
-  return { rooms, agents, events, hub: shiftedHub, bounds: { w: maxX + MARGIN, h: maxY + MARGIN }, generatedAt: data.generatedAt || null };
+  const radius = Math.max(HUB_RADIUS, ...islands.map(i => Math.hypot(i.x, i.z) + i.radius));
+  return { islands, agents, events, hub, bounds: { radius: Math.ceil(radius * 1000) / 1000 }, generatedAt: data.generatedAt || null };
 }

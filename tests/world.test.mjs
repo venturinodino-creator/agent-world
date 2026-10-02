@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildWorld } from '../src/world.mjs';
+import { buildWorld, tileOffsets } from '../src/world.mjs';
 
 const NOW = Date.parse('2026-10-02T12:00:00Z');
 const iso = hoursAgo => new Date(NOW - hoursAgo * 3600e3).toISOString();
@@ -11,19 +11,22 @@ const run = (over = {}) => ({ status: 'completed', concl: 'success', date: iso(2
 const wf = (name, over = {}) => ({ name, ...run(), runs: [run()], ...over });
 const commit = (who, hoursAgo, msg = 'a change') => ({ sha: 'abc1234', msg, date: iso(hoursAgo), author: 'x', url: 'commit-url', who, ai: who !== 'you' });
 const world = (repos, config = { localAgents: [] }, opts) => buildWorld({ repos }, config, NOW, opts);
-const agentsIn = (w, name) => w.agents.filter(a => a.room === name);
+const agentsIn = (w, name) => w.agents.filter(a => a.island === name);
+const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+const centre = i => ({ x: i.x, z: i.z });
 
-test('one room per active repo, in a stable order', () => {
+test('one island per active repo, in a stable order', () => {
   const w = world([repo('beta'), repo('alpha')]);
-  assert.deepEqual(w.rooms.map(r => r.name), ['alpha', 'beta']);
+  assert.deepEqual(w.islands.map(r => r.name), ['alpha', 'beta']);
 });
 
-test('dormant repos are left out unless asked for, then appear as closed rooms with no agents', () => {
+test('dormant repos are left out unless asked for, then appear as closed islands with no agents', () => {
   const repos = [repo('live'), repo('old', { pushed: iso(24 * 90), workflows: [wf('ci')] })];
-  assert.deepEqual(world(repos).rooms.map(r => r.name), ['live']);
+  assert.deepEqual(world(repos).islands.map(r => r.name), ['live']);
   const shown = world(repos, undefined, { showDormant: true });
-  const old = shown.rooms.find(r => r.name === 'old');
+  const old = shown.islands.find(r => r.name === 'old');
   assert.equal(old.dormant, true);
+  assert.equal(old.health, 'dormant');
   assert.deepEqual(agentsIn(shown, 'old'), []);
 });
 
@@ -69,50 +72,68 @@ test('local agents live in their repo, in the lobby when they have none, and are
 });
 
 test('there is no lobby when nobody lives in it', () => {
-  assert.ok(!world([repo('a')]).rooms.some(r => r.name === 'Lobby'));
+  assert.ok(!world([repo('a')]).islands.some(r => r.name === 'Lobby'));
 });
 
-test('rooms grow with the number of agents', () => {
+test('islands grow with the number of agents', () => {
   const many = [...Array(13)].map((_, i) => wf('wf' + String(i).padStart(2, '0')));
   const w = world([repo('big', { workflows: many }), repo('small', { workflows: [wf('one')] })]);
-  const area = n => { const r = w.rooms.find(x => x.name === n); return r.w * r.h; };
-  assert.ok(area('big') > area('small') * 3);
+  const radius = n => w.islands.find(x => x.name === n).radius;
+  assert.ok(radius('big') > radius('small'));
 });
 
-test('every agent has a desk inside its own room', () => {
-  const w = world([repo('a', { workflows: [wf('x'), wf('y'), wf('z')], commits: [commit('you', 3)] })]);
+test('every agent stands on its own tile inside its own island, away from the headquarters tile', () => {
+  const w = world([repo('a', { workflows: [...Array(12)].map((_, i) => wf('w' + i)), commits: [commit('you', 3), commit('claude', 3)] })]);
+  const island = w.islands.find(x => x.name === 'a');
+  const seen = new Set();
   for (const a of w.agents) {
-    const r = w.rooms.find(x => x.name === a.room);
-    assert.ok(a.desk.x > r.x && a.desk.x < r.x + r.w && a.desk.y > r.y && a.desk.y < r.y + r.h, a.id);
+    const d = dist(a.pos, centre(island));
+    assert.ok(d >= 1.5 && d <= island.radius - 1, `${a.id} sits inside the island (distance ${d.toFixed(2)})`);
+    const key = `${a.pos.x.toFixed(3)},${a.pos.z.toFixed(3)}`;
+    assert.ok(!seen.has(key), `${a.id} shares a tile`);
+    seen.add(key);
   }
 });
 
-test('rooms and the hub never overlap and all sit inside the world bounds', () => {
+test('islands and the hub never overlap, and the world radius encloses them all', () => {
   const repos = ['a', 'b', 'c', 'd', 'e'].map((n, i) => repo(n, { workflows: [...Array(i * 3 + 1)].map((_, j) => wf('w' + j)) }));
   const w = world(repos);
-  const boxes = [...w.rooms, { name: 'hub', ...w.hub }];
-  for (let i = 0; i < boxes.length; i++) {
-    const p = boxes[i];
-    assert.ok(p.x >= 0 && p.y >= 0 && p.x + p.w <= w.bounds.w && p.y + p.h <= w.bounds.h, p.name + ' inside bounds');
-    for (let j = i + 1; j < boxes.length; j++) {
-      const q = boxes[j];
-      const apart = p.x + p.w <= q.x || q.x + q.w <= p.x || p.y + p.h <= q.y || q.y + q.h <= p.y;
-      assert.ok(apart, `${p.name} overlaps ${q.name}`);
-    }
-  }
+  const circles = [{ name: 'hub', ...w.hub }, ...w.islands];
+  circles.forEach((p, i) => {
+    assert.ok(Math.hypot(p.x, p.z) + p.radius <= w.bounds.radius + 1e-6, `${p.name} is inside the world`);
+    circles.slice(i + 1).forEach(q => assert.ok(dist(p, q) >= p.radius + q.radius, `${p.name} overlaps ${q.name}`));
+  });
 });
 
-test('closed rooms sit outside the live rooms and nothing overlaps', () => {
+test('closed islands sit further out than live ones and nothing overlaps', () => {
   const live = ['a', 'b', 'c'].map(n => repo(n, { workflows: [wf('w1'), wf('w2'), wf('w3')] }));
   const old = ['x', 'y', 'z', 'q'].map(n => repo(n, { pushed: iso(24 * 90) }));
   const w = world([...live, ...old], undefined, { showDormant: true });
-  const far = r => Math.hypot(r.x + r.w / 2 - w.bounds.w / 2, r.y + r.h / 2 - w.bounds.h / 2);
-  const nearestClosed = Math.min(...w.rooms.filter(r => r.dormant).map(far));
-  const farthestLive = Math.max(...w.rooms.filter(r => !r.dormant).map(far));
-  assert.ok(nearestClosed > farthestLive, 'closed rooms are further out than live ones');
-  const boxes = [...w.rooms, { name: 'hub', ...w.hub }];
-  boxes.forEach((p, i) => boxes.slice(i + 1).forEach(q => assert.ok(
-    p.x + p.w <= q.x || q.x + q.w <= p.x || p.y + p.h <= q.y || q.y + q.h <= p.y, `${p.name} overlaps ${q.name}`)));
+  const from = i => Math.hypot(i.x, i.z);
+  assert.ok(Math.min(...w.islands.filter(r => r.dormant).map(from)) > Math.max(...w.islands.filter(r => !r.dormant).map(from)), 'closed islands are further out');
+  const circles = [{ name: 'hub', ...w.hub }, ...w.islands];
+  circles.forEach((p, i) => circles.slice(i + 1).forEach(q => assert.ok(dist(p, q) >= p.radius + q.radius, `${p.name} overlaps ${q.name}`)));
+});
+
+test('an island is a hexagonal patch of tiles, all distinct and all inside its radius', () => {
+  for (const rings of [1, 2, 3, 4]) {
+    const tiles = tileOffsets(rings), radius = Math.sqrt(3) * rings + 1.3;
+    assert.equal(tiles.length, 1 + 3 * rings * (rings + 1));
+    assert.deepEqual([tiles[0].x, tiles[0].z], [0, 0], 'the first tile is the headquarters in the middle');
+    assert.equal(new Set(tiles.map(t => `${t.x.toFixed(3)},${t.z.toFixed(3)}`)).size, tiles.length);
+    assert.ok(tiles.every(t => Math.hypot(t.x, t.z) + 1 <= radius + 1e-9));
+  }
+  const w = world([repo('a', { workflows: [wf('x'), wf('y'), wf('z')] })]);
+  const tiles = tileOffsets(w.islands[0].rings), island = w.islands[0];
+  assert.ok(w.agents.every(a => tiles.some(t => Math.abs(island.x + t.x - a.pos.x) < 0.002 && Math.abs(island.z + t.z - a.pos.z) < 0.002)), 'agents stand on real tiles');
+});
+
+test('an island shows its health: failing beats running beats healthy', () => {
+  const health = ws => world([repo('a', { workflows: ws })]).islands[0].health;
+  assert.equal(health([wf('ok'), wf('bad', { concl: 'failure' }), wf('go', { status: 'in_progress', concl: null })]), 'fail');
+  assert.equal(health([wf('ok'), wf('go', { status: 'in_progress', concl: null })]), 'running');
+  assert.equal(health([wf('ok')]), 'ok');
+  assert.equal(health([]), 'idle');
 });
 
 test('events are the last 24 hours, oldest first, and belong to existing agents', () => {
@@ -126,6 +147,7 @@ test('events are the last 24 hours, oldest first, and belong to existing agents'
   assert.equal(w.events[0].detail, 'failed', 'the feed already shows the name, so it shows only the result');
   assert.equal(w.events[2].text, 'fresh work');
   assert.equal(w.events[2].detail, 'fresh work');
+  assert.equal(w.events[2].island, 'a');
   const ids = new Set(w.agents.map(x => x.id));
   assert.ok(w.events.every(e => ids.has(e.agentId)));
 });
@@ -141,7 +163,7 @@ test('the same input always gives the same world', () => {
   assert.equal(JSON.stringify(world(repos)), JSON.stringify(world(repos)));
 });
 
-test('agent details carry what the panel needs', () => {
+test('agent details carry what the card needs', () => {
   const w = world([repo('a', { workflows: [wf('Deploy', { runs: [run({ date: iso(1) }), run({ date: iso(5), concl: 'failure' })] })],
     commits: [commit('you', 4, 'tidy up')] })]);
   const d = w.agents.find(x => x.id === 'a::Deploy').details;

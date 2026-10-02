@@ -14,7 +14,7 @@ export function createFeed(root) {
       empty.hidden = true;
       const li = el('li');
       const who = el('span', 'who', agentName), text = /^https:\/\//.test(event.url || '') ? Object.assign(el('a', '', event.detail ?? event.text), { href: event.url, target: '_blank', rel: 'noopener' }) : el('span', '', event.detail ?? event.text);
-      const meta = el('span', 't', ago(event.time, now) + ' · ' + event.room);
+      const meta = el('span', 't', ago(event.time, now) + ' · ' + event.island);
       li.append(el('span', `dot ${event.result}`), who, text, meta);
       list.prepend(li);
       while (list.children.length > MAX) list.lastChild.remove();
