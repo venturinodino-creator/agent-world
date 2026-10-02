@@ -31,8 +31,10 @@
     <button id="tbDormant" title="Show or hide quiet repos" aria-label="Dormant repos">☾</button>
   </nav>
   <aside class="card" id="card" hidden></aside>
-  <section class="feed" id="feed" aria-label="Activity feed">
-    <div class="ph"><span>Activity · last 24h replay</span></div>
+  <section class="feed collapsed" id="feed" aria-label="Activity feed">
+    <button class="ph" id="feedToggle" type="button" aria-expanded="false">
+      <span>Activity · last 24h replay</span><span class="badge" id="feedBadge" hidden></span><span class="chev">▴</span>
+    </button>
     <p class="empty" hidden>Quiet day: no commits or runs in the last 24 hours.</p>
     <ul class="feed-list"></ul>
   </section>

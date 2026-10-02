@@ -10,6 +10,16 @@ import { createFeed } from './feed.mjs';
 
 const $ = s => document.querySelector(s);
 const feed = createFeed($('#feed'));
+// The feed starts collapsed so it does not cover the world; a badge counts what arrived while it was closed.
+const feedBox = $('#feed'), badge = $('#feedBadge'), toggle = $('#feedToggle');
+let unseen = 0;
+function setFeedOpen(open) {
+  feedBox.classList.toggle('collapsed', !open); toggle.setAttribute('aria-expanded', String(open));
+  if (open) { unseen = 0; badge.hidden = true; }
+  try { localStorage.setItem('world.feedOpen', open ? '1' : '0'); } catch { /* storage blocked: the choice just is not remembered */ }
+}
+toggle.onclick = () => setFeedOpen(feedBox.classList.contains('collapsed'));
+try { if (localStorage.getItem('world.feedOpen') === '1') setFeedOpen(true); } catch { /* collapsed by default */ }
 const labels = $('#labels'), card = $('#card'), side = $('#side');
 const state = { data: null, world: null, selectedAgent: null, selectedIsland: null, hoverAgent: null, showDormant: false, expanded: new Set(), needsFit: true };
 const ui = { papers: [], errands: [], hubGlow: 0 };
@@ -114,6 +124,7 @@ function replay(t) {
       ui.papers.push({ agentId: e.agentId, result: e.result, start: t, dur: FLIGHT_S });
       ui.errands.push({ agentId: e.agentId, result: e.result, start: t });     // its robot walks the crate to the headquarters
       feed.add(e, agent.name);
+      if (feedBox.classList.contains('collapsed')) { unseen++; badge.textContent = String(unseen); badge.hidden = false; }
     }
   }
   lastClock = clock;
