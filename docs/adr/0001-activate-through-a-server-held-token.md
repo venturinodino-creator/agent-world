@@ -1,0 +1,3 @@
+# Activating a workflow goes through a Supabase function that holds the GitHub token
+
+Agent World is a public static page, so it cannot hold a GitHub token. Activate calls a Supabase Edge Function in the existing Energy Lead Dashboard project; the function checks the caller is the signed-in Admin, then starts the workflow with a fine-grained token (Actions read and write on the four CRM repos) kept as a Supabase secret. We rejected opening GitHub's "Run workflow" page for the owner to press (no secret, but two clicks and it does not feel like activating) and putting a token in the page (anyone could read it). The consequence is one setup step only the owner can do, and that agent-hq must stay untouched: the function lives beside its Supabase tables, not in its repo.
