@@ -106,7 +106,8 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
   // back-light that rims every figure. The darker shadow side is what the ambient occlusion pass then deepens.
   scene.add(new THREE.HemisphereLight(0xcfe0ff, 0xd9a56b, 0.62));
   const sun = new THREE.DirectionalLight(0xffefd2, 3.4);
-  const shadowSize = Math.min(4096, renderer.capabilities.maxTextureSize);
+  const shadowSize = Math.min(2048, renderer.capabilities.maxTextureSize);
+  renderer.shadowMap.autoUpdate = false;   // redrawn every other frame in update(): shadows barely move between frames
   sun.castShadow = true; sun.shadow.mapSize.set(shadowSize, shadowSize); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.025; sun.shadow.radius = 3;
   const rim = new THREE.DirectionalLight(0xaad0ff, 0.9); rim.position.set(-30, 18, -40);
   scene.add(sun, sun.target, rim);
@@ -478,6 +479,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       tmp.set(r.bx, 1.1, r.bz).lerp(S.hubTop, e); tmp.y += Math.sin(k * Math.PI) * 2.2;
       mm.position.copy(tmp); mm.rotation.set(0, t * 6, Math.sin(t * 8) * 0.4); mm.scale.setScalar(1 - k * 0.35);
     }
+    renderer.shadowMap.needsUpdate = (S.frame = (S.frame || 0) + 1) % 2 === 1;
     post.tick(performance.now());
     post.render();
   }

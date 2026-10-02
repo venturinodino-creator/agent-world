@@ -3,6 +3,7 @@
 // dressed with procedural textures (panels, plaster, shingles, wood), so there are no model or image files to load.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { panelSkin, ribSkin, plasterSkin, domeSkin, shingleSkin, solarSkin, crateSkin, concreteSkin, fabricSkin, faceSkin } from './textures.mjs';
 
 export const PALETTE = { white: 0xf3f6ff, ice: 0xa9d3ff, iceDark: 0x78b4f0, blue: 0x3b72f2, red: 0xe2493a, teal: 0x2fb89b,
@@ -19,11 +20,42 @@ export const STATUS = {
 export const HEALTH = { ok: 0x2fd6a0, running: 0x3fd7e8, fail: 0xff6a3d, idle: 0xf2d24a, dormant: 0x5a6080 };
 const BOT = { workflow: 0xdbeaff, builder: 0xff7ab8, bot: 0xff5a5a, human: 0x3b72f2, local: 0xffa24a };
 
-// Painted plastic and metal with a thin glossy clear coat, so edges catch a highlight like a rendered toy.
-const toy = (color, extra = {}) => new THREE.MeshPhysicalMaterial({ color, roughness: 0.5, metalness: 0.05, clearcoat: 0.3, clearcoatRoughness: 0.4, ...extra });
+// The glossy clear-coat shader is the expensive one, so only parts that ask for a `clearcoat` (helmets, hard hats,
+// roofs and domes) get it; everything else uses the cheaper standard material.
+const make = p => (p.clearcoat ? new THREE.MeshPhysicalMaterial(p) : new THREE.MeshStandardMaterial(p));
+// Materials that never change are shared by everything that asks for the same one, which is what lets flatten() below
+// merge a whole building into a few draw calls. A part that gets tinted or flashed per agent asks for its `own`.
+const sharedMats = new Map();
+const shared = p => {
+  const key = JSON.stringify(p, (k, v) => (v && v.isTexture ? v.uuid : v));
+  if (!sharedMats.has(key)) sharedMats.set(key, make(p));
+  return sharedMats.get(key);
+};
+const toy = (color, extra = {}, own = false) => (own ? make : shared)({ color, roughness: 0.5, metalness: 0.05, ...extra });
 const glow = (color, k = 1) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: k, roughness: 0.4 });
 // A surface with a procedural skin: the colour is baked into the map, a bump map gives the seams real relief.
-const skinned = (sk, extra = {}) => new THREE.MeshPhysicalMaterial({ map: sk.map, bumpMap: sk.bumpMap, bumpScale: 1.4, roughness: 0.55, metalness: 0.08, clearcoat: 0.25, clearcoatRoughness: 0.45, ...extra });
+const skinned = (sk, extra = {}, own = false) => (own ? make : shared)({ map: sk.map, bumpMap: sk.bumpMap, bumpScale: 1.4, roughness: 0.55, metalness: 0.08, ...extra });
+
+// Bakes every mesh of a model into one mesh per material (about 30 small meshes become 5 or 6), because thousands of
+// separate draw calls per frame, not triangles, is what makes a scene like this stutter. Parts under a group listed in
+// `keep` (swinging arms) stay separate. Call it before the model is scaled or moved.
+function flatten(g, keep = []) {
+  g.updateMatrixWorld(true);
+  const inverse = new THREE.Matrix4().copy(g.matrixWorld).invert(), byMat = new Map(), gone = [];
+  g.traverse(o => {
+    if (!o.isMesh || keep.some(k => k === o || k.getObjectById(o.id))) return;
+    // rounded boxes come without an index and the other shapes with one, and merging needs them all alike
+    const flat = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    const geo = flat.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse, o.matrixWorld));
+    if (!byMat.has(o.material)) byMat.set(o.material, { geos: [], cast: false });
+    const e = byMat.get(o.material); e.geos.push(geo); e.cast ||= o.castShadow; gone.push(o);
+  });
+  const built = [...byMat].map(([material, e]) => [material, e, mergeGeometries(e.geos)]);
+  if (built.some(b => !b[2])) return g;            // attributes did not line up; leave the model as it was
+  gone.forEach(o => { o.geometry.dispose(); o.removeFromParent(); });
+  for (const [material, e, geo] of built) { const m = new THREE.Mesh(geo, material); m.castShadow = e.cast; g.add(m); }
+  return g;
+}
 const DARK = 0x262b38;
 // Only parts big enough to matter cast a shadow; the many tiny ones would just cost frames.
 const mesh = (geo, mat, x = 0, y = 0, z = 0) => {
@@ -41,7 +73,7 @@ const round = (w, h, d, r = 0.03) => new RoundedBoxGeometry(w, h, d, 2, r);
 // a concrete plinth, riveted panels, framed windows, a drain pipe and a roof vent.
 export function buildTower(status, variant = 0) {
   const s = STATUS[status] || STATUS.ok, g = new THREE.Group();
-  const roof = skinned(ribSkin(s.body), { roughness: 0.35, metalness: 0.25 }), windows = glow(s.glow, 1.1), frame = toy(DARK, { roughness: 0.6 });
+  const roof = skinned(ribSkin(s.body), { roughness: 0.35, metalness: 0.25, clearcoat: 0.4, clearcoatRoughness: 0.3 }, true), windows = glow(s.glow, 1.1), frame = toy(DARK, { roughness: 0.6 });
   const white = () => skinned(panelSkin(PALETTE.white)), crate = c => skinned(crateSkin(c), { roughness: 0.7 });
   g.add(mesh(DRUM(0.5, 0.53, 0.05), skinned(concreteSkin(0x8d93a3), { roughness: 0.9 }), 0, 0.025, 0));
   g.add(mesh(DRUM(0.44, 0.47, 0.5), skinned(panelSkin(PALETTE.ice)), 0, 0.25, 0));
@@ -66,14 +98,14 @@ export function buildTower(status, variant = 0) {
     g.add(mesh(round(0.14, 0.14, 0.14), crate(PALETTE.red), 0.1, 0.77, 0.04));
   }
   g.userData.mats = { body: roof, ring: windows };
-  return g;
+  return flatten(g);
 }
 
 // The building for Claude and the auto-commit bot: a red tripod rig carrying an ice-blue drum, like the
 // "design-system" rig in the reference.
 export function buildRig(status) {
   const s = STATUS[status] || STATUS.ok, g = new THREE.Group();
-  const cap = skinned(ribSkin(s.body), { metalness: 0.25 }), windows = glow(s.glow, 1.1), legs = toy(PALETTE.red, { metalness: 0.35, roughness: 0.4 });
+  const cap = skinned(ribSkin(s.body), { metalness: 0.25 }, true), windows = glow(s.glow, 1.1), legs = toy(PALETTE.red, { metalness: 0.35, roughness: 0.4 });
   for (let i = 0; i < 3; i++) {
     const pivot = new THREE.Group(); pivot.rotation.y = (i * Math.PI * 2) / 3;
     const leg = mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.72, 8), legs, 0.2, 0.36, 0); leg.rotation.z = 0.36; pivot.add(leg);
@@ -86,14 +118,14 @@ export function buildRig(status) {
   g.add(mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.22, 6), toy(PALETTE.white, { metalness: 0.5 }), 0, 1.09, 0));
   g.add(mesh(new THREE.SphereGeometry(0.035, 10, 8), glow(s.glow, 1.4), 0, 1.22, 0));
   g.userData.mats = { body: cap, ring: windows };
-  return g;
+  return flatten(g);
 }
 
 // A terracotta drum with a brown dome: the building for Claude, the auto-commit bot and each repo's headquarters.
 // Plastered walls, a segmented dome, a plinth, a doorway and side vents.
 export function buildPod(status, scale = 1) {
   const s = STATUS[status] || STATUS.ok, g = new THREE.Group();
-  const dome = skinned(domeSkin(PALETTE.brown), { roughness: 0.4, metalness: 0.22 }), stripe = glow(s.glow, 1.0);
+  const dome = skinned(domeSkin(PALETTE.brown), { roughness: 0.4, metalness: 0.22, clearcoat: 0.5, clearcoatRoughness: 0.25 }, true), stripe = glow(s.glow, 1.0);
   g.add(mesh(DRUM(0.5, 0.54, 0.05), skinned(concreteSkin(0x9a8f84), { roughness: 0.9 }), 0, 0.025, 0));
   g.add(mesh(DRUM(0.46, 0.5, 0.42), skinned(plasterSkin(PALETTE.terracotta), { roughness: 0.85 }), 0, 0.21, 0));
   g.add(mesh(DRUM(0.505, 0.505, 0.05), skinned(plasterSkin(0xb85f2c), { roughness: 0.85 }), 0, 0.12, 0));
@@ -107,6 +139,7 @@ export function buildPod(status, scale = 1) {
   g.add(mesh(new THREE.BoxGeometry(0.16, 0.08, 0.16), skinned(panelSkin(PALETTE.white)), 0.1, 0.83, 0.05));
   g.add(mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.3, 6), toy(PALETTE.white, { metalness: 0.5 }), -0.08, 0.95, -0.05));
   g.add(mesh(new THREE.SphereGeometry(0.04, 10, 8), glow(PALETTE.red, 1.2), -0.08, 1.12, -0.05));
+  flatten(g);
   g.scale.setScalar(scale);
   g.userData.mats = { body: dome, ring: stripe };
   return g;
@@ -116,7 +149,7 @@ export function buildPod(status, scale = 1) {
 // a framed door and a window with mullions.
 export function buildHouse(status) {
   const s = STATUS[status] || STATUS.ok, g = new THREE.Group();
-  const roof = skinned(shingleSkin(s.body), { roughness: 0.7 }), door = glow(s.glow, 1.0), trim = toy(0xe6e2da, { roughness: 0.7 });
+  const roof = skinned(shingleSkin(s.body), { roughness: 0.7 }, true), door = glow(s.glow, 1.0), trim = toy(0xe6e2da, { roughness: 0.7 });
   g.add(mesh(round(0.72, 0.42, 0.62, 0.05), skinned(plasterSkin(PALETTE.white), { roughness: 0.85 }), 0, 0.21, 0));
   const top = mesh(new THREE.ConeGeometry(0.62, 0.36, 4), roof, 0, 0.6, 0); top.rotation.y = Math.PI / 4; g.add(top);
   g.add(mesh(round(0.1, 0.2, 0.1, 0.01), skinned(plasterSkin(0xb5533c), { roughness: 0.9 }), 0.2, 0.66, -0.12));   // chimney
@@ -128,19 +161,19 @@ export function buildHouse(status) {
   g.add(mesh(new THREE.BoxGeometry(0.14, 0.014, 0.05), trim, 0.22, 0.26, 0.335));
   g.add(mesh(round(0.28, 0.03, 0.12, 0.01), skinned(concreteSkin(0x9aa0ad)), 0, 0.015, 0.4));                          // step
   g.userData.mats = { body: roof, ring: door };
-  return g;
+  return flatten(g);
 }
 
 // A white dish on a drum: the building for a Cowork / local agent.
 export function buildDish(status) {
   const s = STATUS[status] || STATUS.asleep, g = new THREE.Group();
-  const dish = skinned(panelSkin(PALETTE.white), { metalness: 0.15, roughness: 0.4 }), ring = glow(s.glow, 0.9);
+  const dish = skinned(panelSkin(PALETTE.white), { metalness: 0.15, roughness: 0.4 }, true), ring = glow(s.glow, 0.9);
   g.add(mesh(DRUM(0.36, 0.42, 0.26), skinned(panelSkin(PALETTE.ice)), 0, 0.13, 0));
   g.add(mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.46, 8), toy(PALETTE.white, { metalness: 0.4, roughness: 0.4 }), 0, 0.47, 0));
   const d = mesh(HALF(0.38, 20), dish, 0, 0.74, 0); d.rotation.x = -0.9; g.add(d);
   g.add(mesh(new THREE.SphereGeometry(0.06, 10, 8), ring, 0, 0.9, 0.18));
   g.userData.mats = { body: dish, ring };
-  return g;
+  return flatten(g);
 }
 
 // The little character that works at a building. Arms are kept so they can swing while typing.
@@ -150,7 +183,7 @@ export function buildDish(status) {
 export function buildRobot(kind, name) {
   const color = kind === 'builder' ? (name === 'Auto-commit bot' ? BOT.bot : BOT.builder) : BOT[kind] || BOT.workflow;
   const cloth = fabricSkin(), human = kind === 'human';
-  const g = new THREE.Group(), body = skinned(cloth, { color, roughness: 0.7, bumpScale: 0.6 });
+  const g = new THREE.Group(), body = skinned(cloth, { color, roughness: 0.7, bumpScale: 0.6 }, true);
   const trousers = skinned(cloth, { color: 0x333a52, roughness: 0.8, bumpScale: 0.6 }), boot = toy(0x2a211c, { roughness: 0.65 });
   const skinTone = toy(0xffd9b0, { roughness: 0.55 }), metal = toy(PALETTE.white, { metalness: 0.4, roughness: 0.35 });
   for (const x of [-0.04, 0.04]) {
@@ -174,6 +207,7 @@ export function buildRobot(kind, name) {
     g.add(mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.1, 6), metal, 0, 0.68, 0));
     g.add(mesh(new THREE.SphereGeometry(0.028, 10, 8), glow(color, 1.3), 0, 0.74, 0));
   }
+  flatten(g);
   // each arm hangs from a shoulder pivot, so swinging it looks like an arm and not a spinning stick
   const arms = [-1, 1].map(side => {
     const shoulder = new THREE.Group(); shoulder.position.set(side * 0.115, 0.38, 0);
@@ -199,7 +233,7 @@ export function buildHub() {
   g.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 8), toy(PALETTE.white, { metalness: 0.5 }), 0, 5.4, 0));
   g.add(mesh(new THREE.SphereGeometry(0.2, 18, 14), orb, 0, 5.95, 0));
   g.userData = { orb, ring, beacon };
-  return g;
+  return flatten(g);
 }
 
 // Small text symbols ("!", "z") that float above characters.

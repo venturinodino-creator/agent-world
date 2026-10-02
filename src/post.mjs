@@ -1,7 +1,11 @@
 // The "render" look: screen-space ambient occlusion (soft darkening in creases and under things, which is what makes
 // flat shapes read as solid), bloom on the glowing parts, a gentle tilt-shift blur towards the top and bottom of the
-// picture like a photographed miniature, and a final grade with a soft vignette. Costs real GPU time, so it can be
-// switched off (header button) and switches itself off on a machine that cannot keep up. Browser only.
+// picture like a photographed miniature, and a final grade with a soft vignette.
+//
+// These cost real GPU time, so the pipeline keeps itself smooth: the occlusion and bloom run at half resolution, and in
+// automatic mode it steps down through cheaper levels (lower resolution, then no occlusion, then no effects) whenever
+// the frame rate falls under about 33 fps. The fx button in the header forces the full look on or turns it all off.
+// Browser only.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -12,7 +16,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
 
-// blur that grows with distance from a horizontal band of focus (a 12-tap spiral, cheap enough for every frame)
+// blur that grows with distance from a horizontal band of focus; pixels inside the band cost a single read
 const TILT = {
   uniforms: { tDiffuse: { value: null }, resolution: { value: new THREE.Vector2(1, 1) }, focus: { value: 0.52 }, band: { value: 0.26 }, amount: { value: 2.8 } },
   vertexShader: VERT,
@@ -20,11 +24,12 @@ const TILT = {
     void main(){
       float d = max(0.0, abs(vUv.y - focus) - band), r = clamp(d * 4.0, 0.0, 1.0) * amount;
       vec4 sum = texture2D(tDiffuse, vUv);
-      for (int i = 1; i <= 12; i++) {
-        float a = float(i) * 2.399963, rr = sqrt(float(i) / 12.0) * r;
+      if (r < 0.4) { gl_FragColor = sum; return; }
+      for (int i = 1; i <= 8; i++) {
+        float a = float(i) * 2.399963, rr = sqrt(float(i) / 8.0) * r;
         sum += texture2D(tDiffuse, vUv + vec2(cos(a), sin(a)) * rr / resolution);
       }
-      gl_FragColor = sum / 13.0;
+      gl_FragColor = sum / 9.0;
     }`,
 };
 
@@ -45,17 +50,25 @@ const GRADE = {
     }`,
 };
 
+// Quality levels, best first: pixel ratio (as a share of the screen's, capped) and whether occlusion runs.
+const dpr = () => window.devicePixelRatio || 1;
+const LEVELS = [
+  { ratio: () => Math.min(dpr(), 1.25), ao: true },
+  { ratio: () => Math.min(dpr(), 1), ao: true },
+  { ratio: () => Math.min(dpr(), 1) * 0.85, ao: false },
+  { ratio: () => Math.min(dpr(), 1), ao: false, off: true },   // no effects at all
+];
+const PLAIN_RATIO = () => Math.min(dpr(), 1.5);
+
 export function createPost(renderer, scene, camera, w, h, { on = true, auto = true, onAuto = () => {} } = {}) {
   // multisampled, so edges stay smooth even though the picture goes through several passes
-  const target = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 4 });
+  const target = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 2 });
   const composer = new EffectComposer(renderer, target);
-  composer.setPixelRatio(renderer.getPixelRatio());
-  composer.setSize(w, h);
   composer.addPass(new RenderPass(scene, camera));
 
   const ao = new GTAOPass(scene, camera, w, h);
-  ao.updateGtaoMaterial({ radius: 0.85, distanceExponent: 1.4, thickness: 1.4, scale: 1.35, samples: 12, distanceFallOff: 1, screenSpaceRadius: false });
-  ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+  ao.updateGtaoMaterial({ radius: 0.85, distanceExponent: 1.4, thickness: 1.4, scale: 1.35, samples: 8, distanceFallOff: 1, screenSpaceRadius: false });
+  ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 5, rings: 2, samples: 8 });
   ao.blendIntensity = 1.0;
   composer.addPass(ao);
 
@@ -65,22 +78,35 @@ export function createPost(renderer, scene, camera, w, h, { on = true, auto = tr
   composer.addPass(new OutputPass());
   composer.addPass(new ShaderPass(GRADE));
 
-  const state = { on, last: 0, ema: 0, frames: 0 };
-  const setSize = (nw, nh) => { composer.setSize(nw, nh); const px = renderer.getPixelRatio(); tilt.uniforms.resolution.value.set(nw * px, nh * px); };
-  setSize(w, h);
+  const st = { on, level: 0, w, h, last: 0, ema: 0, frames: 0 };
+  const layout = () => {
+    const px = renderer.getPixelRatio();
+    composer.setPixelRatio(px); composer.setSize(st.w, st.h);
+    // occlusion and bloom do not need every pixel: half resolution looks the same once blurred and is about 4x cheaper
+    ao.setSize(Math.round((st.w * px) / 2), Math.round((st.h * px) / 2));
+    bloom.setSize(Math.round((st.w * px) / 2), Math.round((st.h * px) / 2));
+    tilt.uniforms.resolution.value.set(st.w * px, st.h * px);
+  };
+  const apply = () => {
+    const lv = LEVELS[st.level];
+    renderer.setPixelRatio(st.on && !lv.off ? lv.ratio() : PLAIN_RATIO());
+    ao.enabled = lv.ao;
+    layout();
+  };
+  apply();
 
   return {
-    get enabled() { return state.on; },
-    setEnabled(v) { state.on = !!v; state.frames = 0; state.ema = 0; },
-    setSize,
-    render() { if (state.on) composer.render(); else renderer.render(scene, camera); },
-    // Called once per frame; if the effects make the picture slower than about 16 frames a second for a couple of
-    // seconds, they switch off (only in automatic mode, and long gaps from a hidden tab are ignored).
+    get enabled() { return st.on && !LEVELS[st.level].off; },
+    setEnabled(v) { st.on = !!v; st.level = 0; st.frames = 0; st.ema = 0; apply(); },
+    setSize(nw, nh) { st.w = nw; st.h = nh; layout(); },
+    render() { if (st.on && !LEVELS[st.level].off) composer.render(); else renderer.render(scene, camera); },
+    // Called once per frame. In automatic mode, a couple of seconds under about 33 fps drops to the next cheaper
+    // level (never back up, so it cannot flicker between looks). Long gaps from a hidden tab are ignored.
     tick(now) {
-      const dt = now - state.last; state.last = now;
-      if (!state.on || !auto || dt > 400 || dt <= 0) return;
-      state.ema = state.ema ? state.ema * 0.94 + dt * 0.06 : dt; state.frames++;
-      if (state.frames > 150 && state.ema > 62) { state.on = false; onAuto(); }
+      const dt = now - st.last; st.last = now;
+      if (!st.on || !auto || dt > 400 || dt <= 0 || st.level >= LEVELS.length - 1) return;
+      st.ema = st.ema ? st.ema * 0.94 + dt * 0.06 : dt; st.frames++;
+      if (st.frames > 90 && st.ema > 30) { st.level++; st.frames = 0; st.ema = 0; apply(); onAuto(st.level); }
     },
   };
 }
