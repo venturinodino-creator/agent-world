@@ -246,6 +246,18 @@ export function symbolSprite(text, color) {
   return s;
 }
 
+// A big bold "z Z Z" that floats over an agent that is not working, climbing and growing like a cartoon sleeper's.
+export function sleepSprite() {
+  const c = document.createElement('canvas'); c.width = 192; c.height = 96;
+  const x = c.getContext('2d'); x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round'; x.lineWidth = 10; x.strokeStyle = '#1b2236';
+  for (const [ch, px, py, size] of [['z', 36, 74, 40], ['Z', 90, 54, 56], ['Z', 148, 36, 74]]) {
+    x.font = `bold ${size}px sans-serif`; x.strokeText(ch, px, py); x.fillStyle = '#eaf0ff'; x.fillText(ch, px, py);
+  }
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: false }));
+  s.scale.set(1.4, 0.7, 1); s.renderOrder = 10;
+  return s;
+}
+
 // The cyan speech-bubble icon that floats over an agent that is working right now.
 export function workingIcon() {
   const c = document.createElement('canvas'); c.width = c.height = 96;

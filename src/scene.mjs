@@ -1,7 +1,7 @@
 // The 3D scene: renderer, camera, lights, sunny desert and sky, floating rocks, hexagon islands with their
 // buildings and robots, the hub, picking and the camera glide. What exists comes from the world model and
 // how it moves comes from anim.mjs; this file decides how it looks. Browser only (needs WebGL).
-import { THREE, STATUS, HEALTH, PALETTE, buildPod, buildRobot, buildingFor, buildHub, symbolSprite, workingIcon } from './models.mjs';
+import { THREE, STATUS, HEALTH, PALETTE, buildPod, buildRobot, buildingFor, buildHub, symbolSprite, workingIcon, sleepSprite } from './models.mjs';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -308,7 +308,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       const halo = a.status === 'running' ? new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.04, 8, 32), new THREE.MeshBasicMaterial({ color: 0x7fe9ff, transparent: true })) : null;
       if (halo) { halo.rotation.x = Math.PI / 2; root.add(halo); }
       const dx = a.pos.x - isl.x, dz = a.pos.z - isl.z, len = Math.hypot(dx, dz) || 1;
-      const alarm = a.status === 'fail' ? symbolSprite('!', '#ff5a4a') : null, zs = a.status === 'asleep' ? [0, 1, 2].map(() => symbolSprite('z', '#d6defa')) : [];
+      const alarm = a.status === 'fail' ? symbolSprite('!', '#ff5a4a') : null, zs = a.status === 'running' || a.status === 'fail' ? [] : [sleepSprite()];   // not working: ok, idle or asleep
       const icon = a.status === 'running' ? iconProto.clone() : null;
       [alarm, icon, ...zs].filter(Boolean).forEach(s => root.add(s));
       root.add(building, robot); S.pickables.push(building, robot);
@@ -408,7 +408,8 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       if (a.status === 'fail') mats.body.emissive.setHex(p.alarm ? 0x66101c : 0x000000);
       if (r.alarm) r.alarm.position.set(rx, 1.5 + Math.sin(t * 6) * 0.04, rz);
       if (r.icon) r.icon.position.set(rx, 1.6 + Math.sin(t * 3 + r.ph * 6) * 0.05, rz);
-      r.zs.forEach((z, i) => { const k = ((t * 0.5 + i / 3 + r.ph) % 1); z.position.set(r.bx + 0.2 + k * 0.3, 0.95 + k * 0.5, r.bz); z.material.opacity = 1 - k; z.scale.setScalar(0.2 + k * 0.22); });
+      // the zzz hovers over the head and follows it when the agent strolls; lower when it is lying down
+      r.zs.forEach(z => { z.position.set(rx + 0.4, (p.asleep ? 1.15 : 1.85) + Math.sin(t * 1.6 + r.ph * 6) * 0.07, rz); z.material.opacity = 0.88 + Math.sin(t * 2.4 + r.ph * 6) * 0.12; });
       if (r.halo) {   // a pulsing ring on the ground shows who is working right now
         const k = (t * 1.2 + r.ph) % 1; r.halo.position.set(rx, 0.2, rz); r.halo.scale.setScalar(0.8 + k * 0.9); r.halo.material.opacity = 0.9 * (1 - k);
       }

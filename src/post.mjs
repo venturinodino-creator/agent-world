@@ -70,6 +70,10 @@ export function createPost(renderer, scene, camera, w, h, { on = true, auto = tr
   ao.updateGtaoMaterial({ radius: 0.85, distanceExponent: 1.4, thickness: 1.4, scale: 1.35, samples: 8, distanceFallOff: 1, screenSpaceRadius: false });
   ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 5, rings: 2, samples: 8 });
   ao.blendIntensity = 1.0;
+  // flat floating things (zzz, alert and work icons, contact-shadow discs, rings) would cast a square shadow of their
+  // own into the occlusion, so they sit out of that pass
+  const hide = ao.overrideVisibility.bind(ao);
+  ao.overrideVisibility = () => { hide(); scene.traverse(o => { if (o.isSprite || (o.material && o.material.transparent)) o.visible = false; }); };
   composer.addPass(ao);
 
   const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.32, 0.55, 0.95);
