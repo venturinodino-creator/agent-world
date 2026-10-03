@@ -107,11 +107,26 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
   post = createPost(renderer, scene, camera, S.size.w, S.size.h, { on: fx !== false, auto: fx === null, onAuto: onFxAuto });
 
   // ----- camera
-  const overview = (R, centre = new THREE.Vector3()) => {
+  const probe = new THREE.PerspectiveCamera(), edgeV = new THREE.Vector3(), AIM = new THREE.Vector3(0, 0.62, 0.78).normalize();
+  // `edge` is a ring of points around every island; `R` is the radius of the circle that holds them, already foreshortened by the tilt.
+  const overview = (edge, R, centre = new THREE.Vector3()) => {
     // frame the world inside the part of the view the side panel does not cover
     const vf = camera.fov * Math.PI / 180, visible = Math.max(0.4, (S.size.w - (S.inset || 0)) / S.size.h), hf = 2 * Math.atan(Math.tan(vf / 2) * visible);
-    const dist = (R * 1.05) / Math.tan(Math.min(vf, hf) / 2);
-    return { target: centre.clone(), position: centre.clone().add(new THREE.Vector3(0, 0.62, 0.78).normalize().multiplyScalar(dist)) };
+    let dist = (R * 1.05) / Math.tan(Math.min(vf, hf) / 2);
+    // The tilt makes the near islands look wider than the far ones, so in a narrow window the sideways reach can still spill out:
+    // measure it from the real camera and back off until every edge is inside the free part of the view.
+    const limit = Math.max(0.25, 1 - (S.inset || 0) / S.size.w) - 0.03;
+    probe.fov = camera.fov; probe.aspect = S.size.w / S.size.h; probe.updateProjectionMatrix();
+    const spill = d => {
+      probe.position.copy(centre).addScaledVector(AIM, d); probe.lookAt(centre); probe.updateMatrixWorld(true);
+      let wide = 0; for (const p of edge) wide = Math.max(wide, Math.abs(edgeV.copy(p).project(probe).x)); return wide > limit;
+    };
+    if (spill(dist)) {
+      let hi = dist * 1.25; while (spill(hi) && hi < dist * 16) hi *= 1.25;
+      let lo = hi / 1.25; for (let i = 0; i < 18; i++) { const mid = (lo + hi) / 2; if (spill(mid)) lo = mid; else hi = mid; }
+      dist = hi;
+    }
+    return { target: centre.clone(), position: centre.clone().add(AIM.clone().multiplyScalar(dist)) };
   };
   const glide = (target, position, seconds = 0.9) => {
     S.focus = { t0: performance.now(), dur: seconds * 1000, fromT: controls.target.clone(), fromP: camera.position.clone(), toT: target, toP: position };
@@ -124,7 +139,8 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     const minZ = Math.min(...cells.map(c => c.z - c.radius)), maxZ = Math.max(...cells.map(c => c.z + c.radius));
     const centre = new THREE.Vector3((minX + maxX) / 2, 0, (minZ + maxZ) / 2);
     const reach = Math.max(...cells.map(c => Math.hypot(c.x - centre.x, c.z - centre.z) + c.radius));
-    const o = overview(reach * 0.74 + 1, centre);   // the tilt foreshortens depth, so it can be framed closer
+    const edge = cells.flatMap(c => Array.from({ length: 12 }, (_, k) => [0, 3.5].map(y => new THREE.Vector3(c.x + Math.cos(k * Math.PI / 6) * c.radius, y, c.z + Math.sin(k * Math.PI / 6) * c.radius)))).flat();
+    const o = overview(edge, reach * 0.74 + 1, centre);   // the tilt foreshortens depth, so it can be framed closer
     controls.maxDistance = o.position.distanceTo(o.target) * 2.2 + 20;
     if (instant) { controls.target.copy(o.target); camera.position.copy(o.position); } else glide(o.target, o.position, 0.8);
   }
