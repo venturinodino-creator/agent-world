@@ -46,6 +46,7 @@ const fxParam = new URLSearchParams(location.search).get('fx');
 let fxSaved = null;
 try { fxSaved = localStorage.getItem('world.fx'); } catch { /* storage blocked: automatic */ }
 const fxForce = fxParam === '1' ? true : fxParam === '0' ? false : fxSaved === 'on' ? true : fxSaved === 'off' ? false : null;
+if (new URLSearchParams(location.search).has('debug')) { { window.__stats = () => scene?.stats(); window.__root = () => scene?.debugRoot(); } window.__root = () => scene?.debugRoot(); }   // for measuring: ?debug
 const showFx = () => { $('#btnFx').textContent = 'fx: ' + (scene?.fxOn() ? 'on' : 'off'); };
 let scene = null;
 try { scene = (await import('./scene.mjs')).createScene($('#stage'), { fx: fxForce, onFxAuto: showFx }); }

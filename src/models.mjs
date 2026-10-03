@@ -25,11 +25,19 @@ const BOT = { workflow: 0xdbeaff, builder: 0xff7ab8, bot: 0xff5a5a, human: 0x3b7
 const make = p => (p.clearcoat ? new THREE.MeshPhysicalMaterial(p) : new THREE.MeshStandardMaterial(p));
 // Materials that never change are shared by everything that asks for the same one, which is what lets flatten() below
 // merge a whole building into a few draw calls. A part that gets tinted or flashed per agent asks for its `own`.
-const sharedMats = new Map();
+const sharedMats = new Map(), sharedSet = new Set();
 const shared = p => {
   const key = JSON.stringify(p, (k, v) => (v && v.isTexture ? v.uuid : v));
-  if (!sharedMats.has(key)) sharedMats.set(key, make(p));
+  if (!sharedMats.has(key)) { const m = make(p); sharedMats.set(key, m); sharedSet.add(m); }
   return sharedMats.get(key);
+};
+const glowShared = (color, k = 1) => shared({ color, emissive: color, emissiveIntensity: k, roughness: 0.4 });
+// Gives a geometry one colour per vertex, so parts of different colours can share one material and merge into one mesh.
+const paint = (geo, hex) => {
+  const c = new THREE.Color(hex), n = geo.attributes.position.count, a = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
+  geo.setAttribute('color', new THREE.BufferAttribute(a, 3));
+  return geo;
 };
 const toy = (color, extra = {}, own = false) => (own ? make : shared)({ color, roughness: 0.5, metalness: 0.05, ...extra });
 const glow = (color, k = 1) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: k, roughness: 0.4 });
@@ -53,8 +61,30 @@ function flatten(g, keep = []) {
   const built = [...byMat].map(([material, e]) => [material, e, mergeGeometries(e.geos)]);
   if (built.some(b => !b[2])) return g;            // attributes did not line up; leave the model as it was
   gone.forEach(o => { o.geometry.dispose(); o.removeFromParent(); });
-  for (const [material, e, geo] of built) { const m = new THREE.Mesh(geo, material); m.castShadow = e.cast; g.add(m); }
+  for (const [material, e, geo] of built) { const m = new THREE.Mesh(geo, material); m.castShadow = e.cast; m.userData.shared = sharedSet.has(material); g.add(m); }
   return g;
+}
+
+// Buildings never move, so the parts of every building that use a shared material are merged once more, across all of
+// them: dozens of draw calls per material become one. Parts with their own material (the roofs and windows that pulse
+// per agent) stay put. A merged building can no longer be clicked on its walls, so each gets an invisible stand-in the
+// size of the building for picking. Call it after every building has been placed.
+const invisible = new THREE.MeshBasicMaterial({ visible: false });
+export function bakeStatics(root, groups) {
+  const byMat = new Map(), moved = [];
+  for (const g of groups) {
+    g.updateMatrixWorld(true);
+    for (const m of [...g.children]) {
+      if (!m.isMesh || !m.userData.shared) continue;
+      if (!byMat.has(m.material)) byMat.set(m.material, { geos: [], cast: false });
+      const e = byMat.get(m.material); e.geos.push(m.geometry.clone().applyMatrix4(m.matrixWorld)); e.cast ||= m.castShadow; moved.push(m);
+    }
+  }
+  const built = [...byMat].map(([material, e]) => [material, e, mergeGeometries(e.geos)]);
+  if (built.some(b => !b[2])) return;   // attributes did not line up; leave everything as it was
+  moved.forEach(m => { m.geometry.dispose(); m.removeFromParent(); });
+  for (const [material, e, geo] of built) { const m = new THREE.Mesh(geo, material); m.castShadow = e.cast; root.add(m); }
+  for (const g of groups) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 1, 8), invisible); p.position.y = 0.5; g.add(p); }
 }
 const DARK = 0x262b38;
 // Only parts big enough to matter cast a shadow; the many tiny ones would just cost frames.
@@ -63,10 +93,12 @@ const mesh = (geo, mat, x = 0, y = 0, z = 0) => {
   geo.computeBoundingSphere(); m.castShadow = geo.boundingSphere.radius >= 0.3;
   return m;
 };
-const HALF = (r, seg = 24) => new THREE.SphereGeometry(r, seg, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+const HALF = (r, seg = 16) => new THREE.SphereGeometry(r, seg, 8, 0, Math.PI * 2, 0, Math.PI / 2);
 const DRUM = (rTop, rBot, h) => new THREE.CylinderGeometry(rTop, rBot, h, 8);   // an octagonal drum
 
-const round = (w, h, d, r = 0.03) => new RoundedBoxGeometry(w, h, d, 2, r);
+// A rounded box with its default smoothing is 300 triangles, which adds up over a few thousand small parts: tiny parts
+// are plain boxes and larger ones get a single bevel step.
+const round = (w, h, d, r = 0.03) => (Math.max(w, h, d) < 0.2 ? new THREE.BoxGeometry(w, h, d) : new RoundedBoxGeometry(w, h, d, 1, r));
 
 // The building for a GitHub Actions workflow: an ice-blue drum with a status-coloured roof and windows, a
 // white hatch and one of three rooftop props (solar panel, stacked crates, cubes), like the reference. It now has
@@ -183,36 +215,38 @@ export function buildDish(status) {
 export function buildRobot(kind, name) {
   const color = kind === 'builder' ? (name === 'Auto-commit bot' ? BOT.bot : BOT.builder) : BOT[kind] || BOT.workflow;
   const cloth = fabricSkin(), human = kind === 'human';
-  const g = new THREE.Group(), body = skinned(cloth, { color, roughness: 0.7, bumpScale: 0.6 }, true);
-  const trousers = skinned(cloth, { color: 0x333a52, roughness: 0.8, bumpScale: 0.6 }), boot = toy(0x2a211c, { roughness: 0.65 });
-  const skinTone = toy(0xffd9b0, { roughness: 0.55 }), metal = toy(PALETTE.white, { metalness: 0.4, roughness: 0.35 });
+  // One vertex-coloured fabric material (its own, because the alarm flashes it red) covers the clothes, so body,
+  // trousers, boots, belt, stripe, backpack and arms are one mesh each instead of seven.
+  const g = new THREE.Group(), body = skinned(cloth, { color: 0xffffff, vertexColors: true, roughness: 0.75, bumpScale: 0.6 }, true);
+  const metal = toy(PALETTE.white, { metalness: 0.4, roughness: 0.35 });
   for (const x of [-0.04, 0.04]) {
-    g.add(mesh(new THREE.CylinderGeometry(0.03, 0.026, 0.2, 8), trousers, x, 0.1, 0));
-    g.add(mesh(new THREE.BoxGeometry(0.058, 0.045, 0.1), boot, x, 0.022, 0.012));
+    g.add(mesh(paint(new THREE.CylinderGeometry(0.03, 0.026, 0.2, 8), 0x333a52), body, x, 0.1, 0));
+    g.add(mesh(paint(new THREE.BoxGeometry(0.058, 0.045, 0.1), 0x2a211c), body, x, 0.022, 0.012));
   }
-  g.add(mesh(new THREE.CapsuleGeometry(0.08, 0.12, 6, 12), body, 0, 0.3, 0));
-  g.add(mesh(new THREE.CylinderGeometry(0.0825, 0.0825, 0.028, 12), toy(0x3a2e26, { roughness: 0.6 }), 0, 0.215, 0));                      // belt
-  g.add(mesh(new THREE.CylinderGeometry(0.0815, 0.0815, 0.024, 12), toy(0xdfe6f0, { roughness: 0.25, metalness: 0.35, emissive: 0x28303a }), 0, 0.33, 0)); // vest stripe
-  g.add(mesh(round(0.11, 0.14, 0.05, 0.015), skinned(cloth, { color: human ? 0x4d5a3a : 0x394560, roughness: 0.85 }), 0, 0.31, -0.095));       // backpack
+  g.add(mesh(paint(new THREE.CapsuleGeometry(0.08, 0.12, 3, 10), color), body, 0, 0.3, 0));
+  g.add(mesh(paint(new THREE.CylinderGeometry(0.0825, 0.0825, 0.028, 12), 0x3a2e26), body, 0, 0.215, 0));                      // belt
+  g.add(mesh(paint(new THREE.CylinderGeometry(0.0815, 0.0815, 0.024, 12), 0xdfe6f0), body, 0, 0.33, 0));                       // vest stripe
+  g.add(mesh(paint(round(0.11, 0.14, 0.05, 0.015), human ? 0x4d5a3a : 0x394560), body, 0, 0.31, -0.095));                        // backpack
   if (human) {
-    g.add(mesh(new THREE.SphereGeometry(0.118, 20, 16), skinned(faceSkin(), { color: 0xffd9b0, roughness: 0.55, bumpScale: 0.4 }), 0, 0.52, 0));
+    g.add(mesh(new THREE.SphereGeometry(0.118, 16, 12), skinned(faceSkin(), { color: 0xffd9b0, roughness: 0.55, bumpScale: 0.4 }), 0, 0.52, 0));
     const hat = toy(color, { roughness: 0.25, metalness: 0.1, clearcoat: 0.8, clearcoatRoughness: 0.12 });
-    g.add(mesh(new THREE.SphereGeometry(0.13, 16, 7, 0, Math.PI * 2, 0, Math.PI / 2), hat, 0, 0.55, 0));
-    g.add(mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.014, 14), hat, 0, 0.553, 0.014));
+    g.add(mesh(new THREE.SphereGeometry(0.13, 12, 5, 0, Math.PI * 2, 0, Math.PI / 2), hat, 0, 0.55, 0));
+    g.add(mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.014, 10), hat, 0, 0.553, 0.014));
   } else {
-    g.add(mesh(new THREE.SphereGeometry(0.12, 22, 18), toy(PALETTE.white, { roughness: 0.18, metalness: 0.2, clearcoat: 0.9, clearcoatRoughness: 0.1 }), 0, 0.52, 0));
-    const visor = mesh(new THREE.SphereGeometry(0.095, 16, 12), toy(0x10151f, { roughness: 0.1, metalness: 0.7, clearcoat: 1, clearcoatRoughness: 0.05 }), 0, 0.52, 0.055); visor.scale.set(1.05, 0.7, 0.62); g.add(visor);
-    const eye = glow(0x59d6ff, 1.6);
-    for (const x of [-0.042, 0.042]) g.add(mesh(new THREE.SphereGeometry(0.019, 10, 8), eye, x, 0.525, 0.106));
+    g.add(mesh(new THREE.SphereGeometry(0.12, 16, 12), toy(PALETTE.white, { roughness: 0.18, metalness: 0.2, clearcoat: 0.9, clearcoatRoughness: 0.1 }), 0, 0.52, 0));
+    const visor = mesh(new THREE.SphereGeometry(0.095, 10, 8), toy(0x10151f, { roughness: 0.1, metalness: 0.7, clearcoat: 1, clearcoatRoughness: 0.05 }), 0, 0.52, 0.055); visor.scale.set(1.05, 0.7, 0.62); g.add(visor);
+    const eye = glowShared(0x59d6ff, 1.6);
+    for (const x of [-0.042, 0.042]) g.add(mesh(new THREE.SphereGeometry(0.019, 6, 5), eye, x, 0.525, 0.106));
     g.add(mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.1, 6), metal, 0, 0.68, 0));
-    g.add(mesh(new THREE.SphereGeometry(0.028, 10, 8), glow(color, 1.3), 0, 0.74, 0));
+    g.add(mesh(new THREE.SphereGeometry(0.028, 8, 6), glowShared(color, 1.3), 0, 0.74, 0));
   }
   flatten(g);
   // each arm hangs from a shoulder pivot, so swinging it looks like an arm and not a spinning stick
   const arms = [-1, 1].map(side => {
     const shoulder = new THREE.Group(); shoulder.position.set(side * 0.115, 0.38, 0);
-    shoulder.add(mesh(new THREE.CapsuleGeometry(0.024, 0.1, 4, 8), body, 0, -0.07, 0));
-    shoulder.add(mesh(new THREE.SphereGeometry(0.03, 8, 6), human ? skinTone : metal, 0, -0.15, 0));
+    shoulder.add(mesh(paint(new THREE.CapsuleGeometry(0.024, 0.1, 2, 6), color), body, 0, -0.07, 0));
+    shoulder.add(mesh(paint(new THREE.SphereGeometry(0.03, 6, 4), human ? 0xffd9b0 : 0xf3f6ff), body, 0, -0.15, 0));
+    flatten(shoulder);   // sleeve and hand become one mesh
     g.add(shoulder); return shoulder;
   });
   g.userData = { arms, body };

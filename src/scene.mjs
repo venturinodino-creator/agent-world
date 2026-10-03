@@ -1,9 +1,8 @@
 // The 3D scene: renderer, camera, lights, sunny desert and sky, floating rocks, hexagon islands with their
 // buildings and robots, the hub, picking and the camera glide. What exists comes from the world model and
 // how it moves comes from anim.mjs; this file decides how it looks. Browser only (needs WebGL).
-import { THREE, STATUS, HEALTH, PALETTE, buildPod, buildRobot, buildingFor, buildHub, symbolSprite, workingIcon, sleepSprite } from './models.mjs';
+import { THREE, STATUS, HEALTH, PALETTE, buildPod, buildRobot, buildingFor, buildHub, symbolSprite, workingIcon, sleepSprite, bakeStatics } from './models.mjs';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { panelSkin, solarSkin, crateSkin, fabricSkin, faceSkin, sandSkin } from './textures.mjs';
 import { createPost } from './post.mjs';
@@ -40,7 +39,7 @@ function skyDome() {
 
 // Low sandy dunes that stay flat under the islands and roll away towards the horizon.
 function desert(R) {
-  const size = 2400, seg = 160, geo = new THREE.PlaneGeometry(size, size, seg, seg); geo.rotateX(-Math.PI / 2);
+  const size = 2400, seg = 96, geo = new THREE.PlaneGeometry(size, size, seg, seg); geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position, colors = new Float32Array(pos.count * 3), a = new THREE.Color('#dcaa6e'), b = new THREE.Color('#c88a50'), c = new THREE.Color();
   const flatUntil = R + 14;
   for (let i = 0; i < pos.count; i++) {
@@ -90,6 +89,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
   let renderer;
   try { renderer = new THREE.WebGLRenderer({ antialias: true }); } catch { return null; }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.info.autoReset = false;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
   container.appendChild(renderer.domElement);
@@ -171,7 +171,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
 
   // Props scattered on the empty tiles: solar-panel fields, crate stacks and tanks, so islands look lived in.
   function scatterProps(world) {
-    const panel = new RoundedBoxGeometry(0.5, 0.05, 0.34, 2, 0.02), crate = new RoundedBoxGeometry(0.24, 0.24, 0.24, 2, 0.04), tank = new THREE.CylinderGeometry(0.15, 0.15, 0.34, 12);
+    const panel = new THREE.BoxGeometry(0.5, 0.05, 0.34), crate = new THREE.BoxGeometry(0.24, 0.24, 0.24), tank = new THREE.CylinderGeometry(0.15, 0.15, 0.34, 10);
     const panels = [], crates = [], tanks = [];
     world.islands.forEach((isl, n) => {
       if (isl.dormant) return;
@@ -231,16 +231,16 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     const mat = (extra = {}) => new THREE.MeshStandardMaterial({ roughness: 0.5, ...extra });
     const fabric = (rough = 0.8) => mat({ roughness: rough, map: cloth.map, bumpMap: cloth.bumpMap, bumpScale: 0.6 });
     const parts = {
-      body: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.085, 0.17, 3, 8), fabric(), N),
-      head: new THREE.InstancedMesh(new THREE.SphereGeometry(0.122, 14, 10), mat({ roughness: 0.55, map: face.map, bumpMap: face.bumpMap, bumpScale: 0.3 }), N),
-      hat: new THREE.InstancedMesh(new THREE.SphereGeometry(0.134, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), mat({ roughness: 0.25, metalness: 0.1 }), N),
-      brim: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.155, 0.155, 0.012, 12), mat({ roughness: 0.25, metalness: 0.1 }), N),
-      legs: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.034, 0.03, 0.24, 6), fabric(), N * 2),
+      body: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.085, 0.17, 2, 8), fabric(), N),
+      head: new THREE.InstancedMesh(new THREE.SphereGeometry(0.122, 10, 7), mat({ roughness: 0.55, map: face.map, bumpMap: face.bumpMap, bumpScale: 0.3 }), N),
+      hat: new THREE.InstancedMesh(new THREE.SphereGeometry(0.134, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2), mat({ roughness: 0.25, metalness: 0.1 }), N),
+      brim: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.155, 0.155, 0.012, 8), mat({ roughness: 0.25, metalness: 0.1 }), N),
+      legs: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.034, 0.03, 0.24, 5), fabric(), N * 2),
       boots: new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.05, 0.11), mat({ roughness: 0.65, color: 0x2a211c }), N * 2),
-      arms: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.03, 0.12, 3, 6), fabric(), N * 2),
-      hands: new THREE.InstancedMesh(new THREE.SphereGeometry(0.034, 6, 5), mat({ roughness: 0.55 }), N * 2),
-      belt: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.089, 0.089, 0.03, 10), mat({ roughness: 0.6, color: 0x3a2e26 }), N),
-      stripe: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.0885, 0.0885, 0.026, 10), mat({ roughness: 0.25, metalness: 0.35, color: 0xdfe6f0, emissive: 0x28303a }), N),
+      arms: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.03, 0.12, 1, 5), fabric(), N * 2),
+      hands: new THREE.InstancedMesh(new THREE.SphereGeometry(0.034, 5, 4), mat({ roughness: 0.55 }), N * 2),
+      belt: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.089, 0.089, 0.03, 8), mat({ roughness: 0.6, color: 0x3a2e26 }), N),
+      stripe: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.0885, 0.0885, 0.026, 8), mat({ roughness: 0.25, metalness: 0.35, color: 0xdfe6f0, emissive: 0x28303a }), N),
       pack: new THREE.InstancedMesh(new THREE.BoxGeometry(0.13, 0.17, 0.065), fabric(0.85), N),
       crate: new THREE.InstancedMesh(new THREE.BoxGeometry(0.25, 0.25, 0.25), mat({ roughness: 0.7, map: crateTex.map, bumpMap: crateTex.bumpMap, bumpScale: 1.2 }), N),
       blob: new THREE.InstancedMesh(blobGeometry(0.17), blobMaterial(0.5), N),   // contact shadow under each worker
@@ -304,7 +304,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       building.userData.agentId = a.id; addBlob(building, 0.72, 0.05, 0.55);
       const robot = buildRobot(a.kind, a.name); robot.position.set(a.pos.x, 0.14, a.pos.z + 0.7);
       robot.scale.setScalar(1.5); robot.userData.agentId = a.id; addBlob(robot, 0.2, 0.05, 0.55);
-      const carry = new THREE.Mesh(new RoundedBoxGeometry(0.2, 0.2, 0.2, 2, 0.04), new THREE.MeshStandardMaterial({ color: PALETTE.red, roughness: 0.45 }));
+      const carry = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({ color: PALETTE.red, roughness: 0.45 }));
       carry.position.set(0, 0.8, 0); carry.visible = false; robot.add(carry);
       const sparks = a.status === 'running' ? Array.from({ length: 6 }, () => { const sp = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), new THREE.MeshBasicMaterial({ color: 0xfff1a8 })); root.add(sp); return sp; }) : [];
       const halo = a.status === 'running' ? new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.04, 8, 32), new THREE.MeshBasicMaterial({ color: 0x7fe9ff, transparent: true })) : null;
@@ -317,6 +317,9 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       S.agents.set(a.id, { agent: a, building, robot, carry, sparks, halo, bx: a.pos.x, bz: a.pos.z + 0.7, ph, alarm, icon, zs, island: isl,
         hq: { x: isl.x + (dx / len) * 1.5, z: isl.z + (dz / len) * 1.5 } });
     }
+
+    // the buildings never move, so their shared-material parts are merged across the whole world (see bakeStatics)
+    bakeStatics(root, S.pickables.filter(o => o.userData.mats));
 
     // drifting dark rocks above the world
     const rnd = lcg(7);
@@ -485,10 +488,11 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       mm.position.copy(tmp); mm.rotation.set(0, t * 6, Math.sin(t * 8) * 0.4); mm.scale.setScalar(1 - k * 0.35);
     }
     renderer.shadowMap.needsUpdate = (S.frame = (S.frame || 0) + 1) % 2 === 1;
+    renderer.info.reset();   // counts are kept across the several passes of one frame, so they show the whole frame
     post.tick(performance.now());
     post.render(camera.position.distanceTo(controls.target));
   }
 
-  return { setFx: on => post.setEnabled(on), fxOn: () => post.enabled, setWorld, update, pick, project, agentHead, islandLabel, focusAgent, focusIsland, fit, zoom, setInset, nearAgents, cameraDistance, hasAgent: id => S.agents.has(id),
+  return { debugRoot: () => S.root, stats: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, ratio: renderer.getPixelRatio() }), setFx: on => post.setEnabled(on), fxOn: () => post.enabled, setWorld, update, pick, project, agentHead, islandLabel, focusAgent, focusIsland, fit, zoom, setInset, nearAgents, cameraDistance, hasAgent: id => S.agents.has(id),
     element: renderer.domElement };
 }
