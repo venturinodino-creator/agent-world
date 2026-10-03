@@ -12,7 +12,7 @@ const SQRT3 = Math.sqrt(3);
 // tile, so the tiles are spread out to give them room.
 export const TILE = 1.8;
 // Every tile except the base in the middle is pushed this far outward, so the base has room to be the biggest building.
-export const PUSH = 1.1;
+export const PUSH = 2.0;
 const GAP = 0.4;                      // the strip of ground between neighbouring islands
 const CLOSED_RADIUS = 2.4;            // closed (dormant) islands are small
 const HEX_DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
