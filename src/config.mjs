@@ -3,6 +3,8 @@
 // A repo that is not in the loaded data is simply left out of the world, as is anything in it.
 // Optional startUrl: where the Admin's "Open in Cowork" button goes for that agent (https only; a generic link is used without it).
 export const CONFIG = {
+  // Workflows that are plumbing, not an agent that does a job: they get no building and no astronaut (matched on the name, any case).
+  skipWorkflows: ['pages build and deployment', 'Smoke check', 'CI'],
   localAgents: [
     { name: 'NL Tender Scraper', repo: 'netherlands-crm', schedule: 'Weekdays · Cowork', role: 'TED + TenderNed + web sweep', status: 'scheduled' },
     { name: 'Contacts Agent', repo: 'netherlands-crm', schedule: 'On demand · Cowork', role: 'Finds and enriches contacts', status: 'scheduled' },

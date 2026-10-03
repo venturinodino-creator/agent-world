@@ -35,6 +35,20 @@ test('every workflow is an agent', () => {
   assert.deepEqual(agentsIn(w, 'a').map(x => [x.id, x.kind]), [['a::Deploy', 'workflow'], ['a::Smoke', 'workflow']]);
 });
 
+test('workflows listed in config.skipWorkflows are plumbing, not agents: they make no agent and no event', () => {
+  const config = { localAgents: [], skipWorkflows: ['Pages build and deployment', 'smoke check'] };
+  const w = world([repo('a', { workflows: [wf('pages build and deployment'), wf('Smoke check'), wf('Daily Scan')] })], config);
+  assert.deepEqual(agentsIn(w, 'a').map(x => x.name), ['Daily Scan']);
+  assert.deepEqual(w.events.map(e => e.agentId), ['a::Daily Scan']);
+  assert.equal(w.islands[0].agentCount, 1);
+});
+
+test('an island is sized for the agents that are left once plumbing is skipped', () => {
+  const flows = [...Array.from({ length: 18 }, (_, i) => wf('Scan ' + String(i).padStart(2, '0'))), wf('Smoke check'), wf('pages build and deployment')];
+  assert.equal(world([repo('a', { workflows: flows })]).islands[0].rings, 3);
+  assert.equal(world([repo('a', { workflows: flows })], { localAgents: [], skipWorkflows: ['Smoke check', 'pages build and deployment'] }).islands[0].rings, 2);
+});
+
 test('workflow status comes from its latest run', () => {
   const w = world([repo('a', { workflows: [
     wf('running', { status: 'in_progress', concl: null }), wf('failing', { concl: 'failure' }),

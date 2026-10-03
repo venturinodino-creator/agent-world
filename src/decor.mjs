@@ -99,6 +99,7 @@ function strutOf(a, b) {
 
 // what turns up, and how often, on an empty tile
 const BAG = ['boulder', 'boulder', 'cargo', 'cargo', 'solarArray', 'solarArray', 'generator', 'tank', 'tank', 'lampPost', 'lampPost', 'beacon', 'flag', 'signs', 'dishTripod', 'buggy', 'truck', 'landingPad', 'hexSlab', 'boulder'];
+const LOW = ['landingPad', 'hexSlab', 'solarArray', 'signs', 'flag', 'landingPad'];   // what a crowded island keeps: nothing tall or bulky
 const FLAT = new Set(['landingPad', 'hexSlab']);   // flat things sit in the middle of the tile and take no company
 const templates = new Map();
 const template = kind => { if (!templates.has(kind)) { const g = new THREE.Group(); KINDS[kind](g); templates.set(kind, flatten(g)); } return templates.get(kind); };
@@ -109,12 +110,12 @@ export function scatterDecor(world, tiles, size) {
   const out = [];
   world.islands.forEach((isl, n) => {
     if (isl.dormant) return;
-    const r2 = lcg(101 + n * 53);
-    tiles(isl.rings).forEach((t, i) => {
+    const r2 = lcg(101 + n * 53), all = tiles(isl.rings), crowded = isl.agentCount / (all.length - 1) > 0.5, bag = crowded ? LOW : BAG;
+    all.forEach((t, i) => {
       if (i <= isl.agentCount) return;
-      const count = r2() < 0.55 ? 1 : 2;
+      const count = crowded || r2() < 0.55 ? 1 : 2;
       for (let k = 0; k < count; k++) {
-        const kind = BAG[Math.floor(r2() * BAG.length)], flat = FLAT.has(kind), spread = flat || count === 1 ? 0.18 : 0.62;
+        const kind = bag[Math.floor(r2() * bag.length)], flat = FLAT.has(kind), spread = flat || count === 1 ? 0.18 : 0.62;
         const g = template(kind).clone(), s = size * (0.85 + r2() * 0.35) * (count === 2 && !flat ? 0.8 : 1);
         g.position.set(isl.x + t.x + (r2() - 0.5) * spread * size, 0.14, isl.z + t.z + (r2() - 0.5) * spread * size);
         g.rotation.y = r2() * Math.PI * 2; g.scale.setScalar(s);

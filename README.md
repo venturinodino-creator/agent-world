@@ -22,8 +22,9 @@ so it shows exactly the repos that dashboard shows and never changes it.
 
 ## What moves
 
-Behaviour comes from real status: running agents bounce, type and throw sparks, healthy ones wander, failing ones
-flash red and pace, scheduled Cowork agents sleep. Islands are packed like a honeycomb around the hub rocket. Every
+Behaviour comes from real status: running agents bounce, hammer away and throw sparks under a big working bubble, failing ones
+flash red and pace, and every agent that is not working sleeps, slumped with a big zzz. Plumbing workflows (Pages deploys, smoke
+checks, CI) are left out, see `skipWorkflows` in `src/config.mjs`. A crowded island keeps only low things on its free tiles. Islands are packed like a honeycomb around the hub rocket. Every
 agent is one astronaut at its own building, and nobody else walks around. The last 24 hours of commits and workflow
 runs replay on a four-minute loop: a speech bubble pops up over the agent involved, its astronaut carries a crate to
 the headquarters (which lights up) and walks back, a page flies to the hub, and the activity feed lists it.

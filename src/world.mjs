@@ -31,9 +31,10 @@ const LOCAL_STATUS = { scheduled: 'asleep', running: 'running', fail: 'fail', ok
 const runDetail = run => ({ result: runResult(run), date: run.date, event: run.event, url: run.url });
 const LOCAL_NOTE = 'Not tracked live: this agent is listed by hand, GitHub cannot see its runs.';
 
-function agentsOf(r, localAgents, now) {
+function agentsOf(r, localAgents, now, skip) {
   const out = [];
   for (const w of [...r.workflows].sort(byName)) {
+    if (skip.has(w.name.toLowerCase())) continue;   // plumbing (builds, checks), not an agent that does a job
     const runs = w.runs && w.runs.length ? w.runs : [w];
     out.push({ id: `${r.name}::${w.name}`, name: w.name, kind: 'workflow', status: runStatus(w), repo: r.name, url: w.url,
       details: { latest: runDetail(runs[0]), recent: runs.slice(0, RECENT).map(runDetail) } });
@@ -94,6 +95,7 @@ export function buildWorld(data, config = {}, now = Date.now(), opts = {}) {
   const present = new Set(repos.map(r => r.name));
   const locals = (config.localAgents || []).filter(a => !a.repo || present.has(a.repo));
   const isDormant = r => (now - ms(r.pushed)) / DAY > DORMANT_DAYS;
+  const skip = new Set((config.skipWorkflows || []).map(n => n.toLowerCase()));
 
   const islands = [], agents = [];
   const addIsland = (name, repo, url, list) => {
@@ -103,7 +105,7 @@ export function buildWorld(data, config = {}, now = Date.now(), opts = {}) {
     islands.push({ name, repo, url, dormant: false, agentCount: list.length, rings, radius: round(islandRadius(rings)), health: healthOf(list) });
     list.forEach(a => agents.push({ ...a, island: name }));
   };
-  for (const r of repos.filter(x => !isDormant(x))) addIsland(r.name, r.name, r.url, agentsOf(r, locals.filter(a => a.repo === r.name), now));
+  for (const r of repos.filter(x => !isDormant(x))) addIsland(r.name, r.name, r.url, agentsOf(r, locals.filter(a => a.repo === r.name), now, skip));
   const lobby = locals.filter(a => !a.repo);
   if (lobby.length) addIsland('Lobby', null, null, lobby.map(a => localAgent(a, null, 'Lobby')));
   if (opts.showDormant) {

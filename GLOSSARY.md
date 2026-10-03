@@ -13,12 +13,16 @@ An agent that is running a task right now.
 _Avoid_: Active, busy, live
 
 **Waiting**:
-An agent whose last run finished successfully and which is idle until its next scheduled run.
-_Avoid_: Sleeping, idle, done
+An agent whose last run finished successfully and which is idle until its next scheduled run. Shown asleep.
+_Avoid_: Idle, done
 
 **Asleep**:
-An agent that only runs on a schedule or on demand outside GitHub (a Cowork task), so the world cannot see it run. Shown with a "zzz".
-_Avoid_: Waiting, inactive, disabled
+How the world shows every agent that is not working and not failing: slumped at its building with a big "zzz". That covers waiting agents and agents that only run on a schedule or on demand outside GitHub (a Cowork task), whose runs the world cannot see.
+_Avoid_: Inactive, disabled
+
+**Plumbing**:
+A workflow that builds or checks a repo (a Pages deploy, a smoke check, CI) and does no job of its own. Listed in `skipWorkflows` in `src/config.mjs`; it gets no building and no astronaut.
+_Avoid_: Agent
 
 **Failing**:
 An agent whose last run failed.

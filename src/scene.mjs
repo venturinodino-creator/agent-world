@@ -199,15 +199,15 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       building.scale.setScalar(BUILD);   // chunky, like the reference
       building.userData.agentId = a.id; addBlob(building, 0.72, 0.05, 0.55);
       const robot = buildRobot(a.kind, a.name); robot.position.set(a.pos.x, 0.14, a.pos.z + FRONT);
-      robot.scale.setScalar(ASTRO); robot.userData.agentId = a.id; addBlob(robot, 0.2, 0.05, 0.55);
+      robot.scale.setScalar(ASTRO); robot.rotation.order = 'YXZ'; robot.userData.agentId = a.id; addBlob(robot, 0.2, 0.05, 0.55);
       const carry = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({ color: PALETTE.orange, roughness: 0.45 }));
       carry.position.set(0, 1.0, 0); carry.visible = false; robot.add(carry);
-      const sparks = a.status === 'running' ? Array.from({ length: 6 }, () => { const sp = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), new THREE.MeshBasicMaterial({ color: 0xfff1a8 })); root.add(sp); return sp; }) : [];
-      const halo = a.status === 'running' ? new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.04, 8, 32), new THREE.MeshBasicMaterial({ color: 0x7fe9ff, transparent: true })) : null;
+      const sparks = a.status === 'running' ? Array.from({ length: 6 }, () => { const sp = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), new THREE.MeshBasicMaterial({ color: 0xfff1a8 })); root.add(sp); return sp; }) : [];
+      const halo = a.status === 'running' ? new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.09, 8, 40), new THREE.MeshBasicMaterial({ color: 0x7fe9ff, transparent: true })) : null;
       if (halo) { halo.rotation.x = Math.PI / 2; root.add(halo); }
       const dx = a.pos.x - isl.x, dz = a.pos.z - isl.z, len = Math.hypot(dx, dz) || 1;
-      const alarm = a.status === 'fail' ? symbolSprite('!', '#ff5a4a') : null, zs = a.status === 'asleep' || a.status === 'idle' ? [sleepSprite()] : [];   // zzz only for agents that are really asleep (scheduled Cowork tasks) or idle; 'ok' ones just finished a run and wait for the next
-      const icon = a.status === 'running' ? iconProto.clone() : null;
+      const alarm = a.status === 'fail' ? symbolSprite('!', '#ff5a4a') : null, zs = a.status === 'running' || a.status === 'fail' ? [] : [sleepSprite()];   // every agent that is not working right now (waiting for its next run, idle, scheduled) is seen asleep, with a big zzz
+      const icon = a.status === 'running' ? iconProto.clone() : null; icon?.scale.set(1.15, 1.15, 1);
       [alarm, icon, ...zs].filter(Boolean).forEach(s => root.add(s));
       root.add(building, robot); S.pickables.push(building, robot);
       S.agents.set(a.id, { agent: a, building, robot, carry, sparks, halo, bx: a.pos.x, bz: a.pos.z + FRONT, ph, alarm, icon, zs, island: isl,
@@ -240,7 +240,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     v.set(x, y, z).project(camera);
     return { x: (v.x * 0.5 + 0.5) * S.size.w, y: (-v.y * 0.5 + 0.5) * S.size.h, visible: v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 };
   }
-  const agentHead = id => { const r = S.agents.get(id); return r ? project(r.robot.position.x, 3.3, r.robot.position.z) : null; };
+  const agentHead = id => { const r = S.agents.get(id); return r ? project(r.robot.position.x, 4.6, r.robot.position.z) : null; };
   // The agents closest to what the camera is looking at, for name tags when zoomed in.
   const nearAgents = (radius, limit) => [...S.agents.values()]
     .map(r => ({ id: r.agent.id, d: Math.hypot(r.robot.position.x - controls.target.x, r.robot.position.z - controls.target.z) }))
@@ -279,7 +279,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     for (const r of S.agents.values()) {
       const a = r.agent, p = pose(a, t), mats = r.building.userData.mats, boost = a.id === ui.selectedId ? 1.2 : a.id === ui.hoverId ? 0.8 : 0;
       const er = errandFor(ui.errands, a.id, t);
-      let rx = r.bx + p.dx * WALK_UNITS, rz = r.bz, yaw = p.walking ? (p.facing > 0 ? Math.PI / 2 : -Math.PI / 2) : 0, y = 0.14 + (p.typing ? Math.abs(Math.sin(t * 10 + r.ph * 6)) * 0.07 : p.asleep ? -0.02 : Math.sin(t * 2 + r.ph * 6) * 0.012);
+      let rx = r.bx + p.dx * WALK_UNITS, rz = r.bz, yaw = p.walking ? (p.facing > 0 ? Math.PI / 2 : -Math.PI / 2) : 0, y = 0.14 + (p.typing ? Math.abs(Math.sin(t * 10 + r.ph * 6)) * 0.3 : p.asleep ? -0.1 : Math.sin(t * 2 + r.ph * 6) * 0.012);
       let walking = p.walking;
       if (er) {                      // an errand: carry a crate to the headquarters, drop it off, come back
         rx = r.bx + (r.hq.x - r.bx) * er.u; rz = r.bz + (r.hq.z - r.bz) * er.u;
@@ -292,23 +292,26 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       r.carry.visible = !!er?.carrying;
       r.robot.position.set(rx, y, rz);
       r.robot.rotation.y = yaw;
-      r.robot.rotation.z = p.asleep && !er ? 1.25 : er && walking ? Math.sin(t * 9 + r.ph * 5) * 0.1 : 0;
-      r.robot.userData.arms.forEach((arm, i) => { arm.rotation.x = p.typing && !er ? Math.sin(t * 14 + i * Math.PI) * 0.9 : walking ? Math.sin(t * 9 + i * Math.PI) * 0.6 : 0; });
+      // asleep: slumped forward with the arms hanging; working: leaning into the job with the arms hammering; failing or on an errand: walking
+      const slump = p.asleep && !er;
+      r.robot.rotation.x = slump ? 0.6 + Math.sin(t * 1.4 + r.ph * 6) * 0.04 : p.typing && !er ? 0.18 + Math.sin(t * 10 + r.ph * 6) * 0.06 : 0;
+      r.robot.rotation.z = slump ? 0.22 : er && walking ? Math.sin(t * 9 + r.ph * 5) * 0.1 : 0;
+      r.robot.userData.arms.forEach((arm, i) => { arm.rotation.x = slump ? 0.5 : p.typing && !er ? -0.9 + Math.sin(t * 14 + i * Math.PI) * 0.7 : walking ? Math.sin(t * 9 + i * Math.PI) * 0.6 : 0; });
       r.robot.userData.body.emissive.setHex(p.alarm ? 0xff2244 : 0x000000);
       r.robot.userData.body.emissiveIntensity = p.alarm ? 0.7 : 0;
       const pulse = a.status === 'running' ? 0.6 + 0.5 * Math.sin(t * 6 + r.ph * 6) : a.status === 'fail' ? (p.alarm ? 1.4 : 0.3) : 0;
       mats.ring.emissiveIntensity = 1.0 + pulse + boost;
       if (a.status === 'fail') mats.body.emissive.setHex(p.alarm ? 0x66101c : 0x000000);
-      if (r.alarm) r.alarm.position.set(rx, 3.5 + Math.sin(t * 6) * 0.04, rz);
-      if (r.icon) r.icon.position.set(rx, 3.75 + Math.sin(t * 3 + r.ph * 6) * 0.05, rz);
+      if (r.alarm) r.alarm.position.set(rx, 5.4 + Math.sin(t * 6) * 0.04, rz);
+      if (r.icon) r.icon.position.set(rx, 5.9 + Math.sin(t * 3 + r.ph * 6) * 0.08, rz);
       // the zzz hovers over the head and follows it when the agent strolls; lower when it is lying down
-      r.zs.forEach(z => { z.position.set(rx + 0.9, (p.asleep ? 2.5 : 4.1) + Math.sin(t * 1.6 + r.ph * 6) * 0.07, rz); z.material.opacity = 0.88 + Math.sin(t * 2.4 + r.ph * 6) * 0.12; });
+      r.zs.forEach(z => { z.position.set(rx + 0.9, (p.asleep ? 5.0 : 5.4) + Math.sin(t * 1.6 + r.ph * 6) * 0.12, rz + 0.8); z.material.opacity = 0.88 + Math.sin(t * 2.4 + r.ph * 6) * 0.12; });
       if (r.halo) {   // a pulsing ring on the ground shows who is working right now
         const k = (t * 1.2 + r.ph) % 1; r.halo.position.set(rx, 0.2, rz); r.halo.scale.setScalar(0.8 + k * 0.9); r.halo.material.opacity = 0.9 * (1 - k);
       }
       r.sparks.forEach((sp, i) => {   // a working agent throws sparks off its building
         const u = (t * 1.6 + i / 6 + r.ph) % 1, ang = i * 1.1 + r.ph * 6;
-        sp.position.set(r.bx + Math.cos(ang) * 0.9 * u, 1.6 + u * 1.5, r.bz - FRONT + Math.sin(ang) * 0.9 * u); sp.scale.setScalar(Math.max(0.01, 1 - u));
+        sp.position.set(r.bx + Math.cos(ang) * 1.3 * u, 2.2 + u * 2.6, r.bz - FRONT + Math.sin(ang) * 1.3 * u); sp.scale.setScalar(Math.max(0.01, 1 - u));
       });
     }
 

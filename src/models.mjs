@@ -73,7 +73,7 @@ export function sleepSprite() {
     x.font = `bold ${size}px sans-serif`; x.strokeText(ch, px, py); x.fillStyle = '#eaf0ff'; x.fillText(ch, px, py);
   }
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthTest: false }));
-  s.scale.set(1.4, 0.7, 1); s.renderOrder = 10;
+  s.scale.set(2.3, 1.15, 1); s.renderOrder = 10;
   return s;
 }
 

@@ -27,18 +27,13 @@ test('a failing agent paces and flashes its alarm', () => {
   assert.ok(ps.some(p => p.alarm) && ps.some(p => !p.alarm), 'the alarm flashes');
 });
 
-test('a healthy agent mostly stands still and sometimes wanders a short way and back', () => {
-  const ps = times.map(t => pose(agent('ok'), t));
-  assert.ok(ps.every(p => Math.abs(p.dx) <= 16 && p.dy === 0));
-  assert.ok(ps.filter(p => p.dx === 0).length > ps.length / 2, 'mostly still');
-  assert.ok(ps.some(p => Math.abs(p.dx) > 6), 'but it does wander');
-  assert.ok(ps.every(p => !p.typing && !p.asleep && !p.alarm));
-});
-
-test('agents do not wander in lockstep', () => {
-  const a = times.map(t => pose(agent('ok', 'r::a'), t).dx).join();
-  const b = times.map(t => pose(agent('ok', 'r::b'), t).dx).join();
-  assert.notEqual(a, b);
+test('an agent that is not working, healthy between runs or idle, is seen asleep and never wanders off', () => {
+  for (const status of ['ok', 'idle']) {
+    for (const t of times) {
+      const p = pose(agent(status), t);
+      assert.deepEqual([p.dx, p.dy, p.asleep, p.typing, p.alarm, p.walking], [0, 0, true, false, false, false], status);
+    }
+  }
 });
 
 test('the same agent and time always give the same pose', () => {

@@ -10,7 +10,7 @@ export function hash(id) {
 }
 
 const STILL = { dx: 0, dy: 0, typing: false, asleep: false, alarm: false, walking: false, facing: 1, frame: 0 };
-const WANDER_EVERY = 16, WANDER_FOR = 5, WANDER_REACH = 14, PACE_REACH = 12;
+const PACE_REACH = 12;
 
 // How an agent looks at time t (seconds): offset from its desk in world pixels, plus what it is doing.
 export function pose(agent, t) {
@@ -18,19 +18,13 @@ export function pose(agent, t) {
   switch (agent.status) {
     case 'running':
       return { ...STILL, typing: true, frame: Math.floor(t * 6) % 2 };
-    case 'asleep':
-      return { ...STILL, asleep: true, frame: Math.floor(t * 0.8) % 3 };
     case 'fail': {
       const a = (t + phase) * 1.4;
       return { ...STILL, dx: Math.sin(a) * PACE_REACH, walking: true, facing: Math.cos(a) >= 0 ? 1 : -1,
         alarm: Math.floor((t + phase) * 3) % 2 === 0, frame: Math.floor(t * 6) % 2 };
     }
-    default: {   // ok, idle: stand about, now and then stroll a few steps away and back
-      const u = (t + phase) % WANDER_EVERY, start = WANDER_EVERY - WANDER_FOR;
-      if (u < start) return { ...STILL, frame: Math.floor(t * 0.5) % 2 };
-      const s = (u - start) / WANDER_FOR;
-      return { ...STILL, dx: Math.sin(s * Math.PI) * WANDER_REACH, walking: true, facing: s < 0.5 ? 1 : -1, frame: Math.floor(t * 6) % 2 };
-    }
+    default:   // asleep, ok, idle: anything that is not working right now is seen asleep at its desk
+      return { ...STILL, asleep: true, frame: Math.floor(t * 0.8) % 3 };
   }
 }
 
