@@ -294,37 +294,46 @@ export function buildRobot(kind, name) {
   return g;
 }
 
-// The hub in the middle of the world: a lattice radio tower on a landing pad, with a dish and a blinking beacon that pages
-// fly to. `orb` is the beacon and `ring` the glowing band round its foot; the scene pulses both.
+// The hub in the middle of the world: a big rocket on a landing pad, in the same style as Claude's, that pages fly up to.
+// `ring` is the glow (the pad's light ring and the round windows) and `orb` the beacon on the nose; the scene pulses both.
 const strut = (a, b, r, mat) => {
   const A = new THREE.Vector3(...a), Bv = new THREE.Vector3(...b), d = Bv.clone().sub(A), len = d.length();
-  const m = mesh(new THREE.CylinderGeometry(r, r, len, 5), mat, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
+  const m = mesh(new THREE.CylinderGeometry(r, r, len, 6), mat, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
   return m;
 };
 export function buildHub() {
   const g = new THREE.Group(), put = adder(g), ring = glow(0x7fd6ff, 1.2), orb = glow(0xff9a3a, 1.8), beacon = glow(0xff9a3a, 1.6);
-  const st = steel(), blink = glowShared(ORANGE, 1.6);
-  put(C(2.5, 2.8, 0.7, 12), skinned(concreteSkin(0x4c5262), { roughness: 0.85 }), 0, 0.35, 0);
-  put(C(1.7, 1.9, 0.3, 12), hull(), 0, 0.85, 0);
-  put(C(1.62, 1.62, 0.05, 12), ring, 0, 1.02, 0);
-  // four slanted legs, square rings every level and crossed braces between them
-  const corner = (k, y) => { const t = (y - 1.0) / 4.1, w = 0.75 - 0.5 * t, sx = k % 2 ? 1 : -1, sz = k < 2 ? 1 : -1; return [sx * w, y, sz * w]; };
-  const levels = [1.0, 2.0, 3.0, 4.0, 5.1], around = [0, 1, 3, 2];   // the corners in walking order round the square
-  for (let k = 0; k < 4; k++) g.add(strut(corner(k, 1.0), corner(k, 5.1), 0.06, st));
-  levels.forEach((y, li) => {
-    for (let i = 0; i < 4; i++) {
-      const here = around[i], next = around[(i + 1) % 4];
-      if (li) g.add(strut(corner(here, y), corner(next, y), 0.035, st));                             // the square ring at this level
-      if (li < levels.length - 1) g.add(strut(corner(here, y), corner(next, levels[li + 1]), 0.028, st));   // a diagonal brace up to the next
-    }
-  });
-  put(C(0.55, 0.6, 0.12, 10), hull(), 0, 5.15, 0);
-  put(C(0.04, 0.04, 1.3, 6), st, 0, 5.85, 0);
-  put(new THREE.SphereGeometry(0.55, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), hull(), 0.4, 5.45, 0.2, [-0.7, 0.5, 0]);
-  put(C(0.02, 0.02, 0.6, 5), st, 0.55, 5.8, 0.28, [0.55, 0.5, 0]);
-  put(new THREE.SphereGeometry(0.12, 12, 8), orb, 0, 6.55, 0);
-  for (const y of [2.0, 3.0, 4.0]) for (const k of [0, 3]) put(new THREE.SphereGeometry(0.06, 6, 5), blink, corner(k, y)[0], y, corner(k, y)[2]);
+  const orange = orangeM(), blue = blueM(), rim = steel();
+  // the pad
+  put(C(2.5, 2.8, 0.7, 16), skinned(concreteSkin(0x4c5262), { roughness: 0.85 }), 0, 0.35, 0);
+  put(C(1.9, 2.1, 0.3, 16), hull(), 0, 0.85, 0);
+  put(C(1.78, 1.78, 0.05, 16), ring, 0, 1.02, 0);
+  put(new THREE.TorusGeometry(1.45, 0.045, 5, 40), orange, 0, 1.06, 0, [Math.PI / 2, 0, 0]);
+  // the hull: a tapering body, a nose cone, and blue bands
+  put(C(0.86, 0.98, 3.3, 20), hull(), 0, 3.2, 0);
+  put(C(1.0, 1.0, 0.2, 20), blue, 0, 2.2, 0);
+  put(C(0.93, 0.93, 0.14, 20), blue, 0, 4.55, 0);
+  put(new THREE.ConeGeometry(0.87, 1.7, 20), hull(), 0, 5.7, 0);
+  put(new THREE.ConeGeometry(0.2, 0.55, 10), blue, 0, 6.5, 0);
+  put(C(0.02, 0.02, 0.35, 5), rim, 0, 6.9, 0);
+  put(new THREE.SphereGeometry(0.15, 12, 8), orb, 0, 7.12, 0);
+  // round windows down the front, each with a steel rim and a glowing pane
+  for (const y of [3.05, 3.7, 4.2]) {
+    const r = 0.94 - (4.85 - y) * 0.035;
+    put(C(0.23, 0.23, 0.08, 14).rotateX(Math.PI / 2), rim, 0, y, r);
+    put(C(0.17, 0.17, 0.09, 14).rotateX(Math.PI / 2), ring, 0, y, r + 0.01);
+  }
+  // an engine hatch low on the front
+  put(B(0.62, 0.8, 0.1), rim, 0, 1.95, 0.99); put(B(0.46, 0.64, 0.11), ring, 0, 1.95, 1.0);
+  // four orange landing legs with round feet, and four blue fins between them
+  for (let i = 0; i < 4; i++) {
+    const t = (i * Math.PI) / 2 + Math.PI / 4, c = Math.cos(t), sn = Math.sin(t);
+    g.add(strut([c * 0.95, 2.35, sn * 0.95], [c * 2.0, 1.05, sn * 2.0], 0.075, orange));
+    put(C(0.32, 0.32, 0.08, 10), orange, c * 2.0, 1.07, sn * 2.0);
+    const fin = new THREE.Group(); fin.rotation.y = -(t + Math.PI / 4) + Math.PI / 2;
+    const f = mesh(B(0.14, 1.5, 0.95), blue, 1.2, 2.35, 0); f.rotation.z = -0.22; fin.add(f); g.add(fin);
+  }
   g.userData = { orb, ring, beacon };
   return flatten(g);
 }
