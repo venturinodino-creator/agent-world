@@ -16,7 +16,7 @@ function skin(key, draw, size = 512, tall = size) {
   draw(x, h, size, lcg(key.length * 977 + size), tall);
   const map = new THREE.CanvasTexture(cc), bumpMap = new THREE.CanvasTexture(hc);
   map.colorSpace = THREE.SRGBColorSpace;
-  for (const t of [map, bumpMap]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; t.userData.keep = true; }
+  for (const t of [map, bumpMap]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; t.userData.keep = true; }
   const out = { map, bumpMap }; cache.set(key, out);
   return out;
 }

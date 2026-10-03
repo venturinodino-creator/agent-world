@@ -15,7 +15,7 @@ const WALK_UNITS = 0.5 / 14;          // pose offsets are in old pixel units; th
 const RESULT_HEX = { ok: 0x41e08a, fail: 0xff5d6c, running: 0x3fd7e8 };
 // How big things are drawn: buildings, the headquarters and the astronauts, and how far in front of its building an
 // agent's astronaut stands (the building's radius plus a little).
-const BUILD = 2.7, HQ_SCALE = 2.7, ASTRO = 3.3, FRONT = 1.95;
+const BUILD = 3.15, HQ_SCALE = 2.95, ASTRO = 3.7, FRONT = 2.15;
 const FOG = 0x2a1844;   // the planet's haze: distance fades into deep violet
 
 // Island floor colours by health: dark slate normally, royal blue while something is working (as in the reference).
@@ -58,7 +58,7 @@ function rimGeometry(outer, width) {
 export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) {
   let renderer;
   try { renderer = new THREE.WebGLRenderer({ antialias: true }); } catch { return null; }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
   renderer.info.autoReset = false;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
@@ -69,16 +69,16 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
   scene.add(skyDome(), planets());
   const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 3200);
   const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true; controls.dampingFactor = 0.08; controls.maxPolarAngle = 1.38; controls.minDistance = 5;
+  controls.enableDamping = true; controls.dampingFactor = 0.08; controls.maxPolarAngle = 1.38; controls.minDistance = 3.5;
 
   // a soft studio environment gives the metal, glass and plastic something to reflect, so they read as real materials
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.22;
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.32;
   // Lighting with contrast is what makes shapes look solid: a strong warm sun, a cool sky fill and a faint
   // back-light that rims every figure. The darker shadow side is what the ambient occlusion pass then deepens.
   scene.add(new THREE.HemisphereLight(0xb08cff, 0x3a2850, 0.55));
   const sun = new THREE.DirectionalLight(0xfff0e0, 3.7);
-  const shadowSize = Math.min(2048, renderer.capabilities.maxTextureSize);
+  const shadowSize = Math.min(3072, renderer.capabilities.maxTextureSize);
   renderer.shadowMap.autoUpdate = false;   // redrawn every other frame in update(): shadows barely move between frames
   sun.castShadow = true; sun.shadow.mapSize.set(shadowSize, shadowSize); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.025; sun.shadow.radius = 3;
   const rim = new THREE.DirectionalLight(0x4ad8ff, 1.4); rim.position.set(-30, 18, -40);

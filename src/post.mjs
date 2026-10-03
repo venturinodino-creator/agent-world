@@ -54,8 +54,8 @@ const GRADE = {
 };
 
 const dpr = () => window.devicePixelRatio || 1;
-const TOP_RATIO = () => Math.min(dpr(), 1.5);    // the sharpest the effects render
-const PLAIN_RATIO = () => Math.min(dpr(), 1.5);  // with effects off
+const TOP_RATIO = () => Math.min(dpr(), 1.75);   // the sharpest the effects render
+const PLAIN_RATIO = () => Math.min(dpr(), 1.75); // with effects off
 const MIN_SCALE = 0.6, SCALE_STEP = 0.1;         // the resolution can drop to 60% of that, in tenths
 const AO_NEAR = 22, AO_FAR = 46;                 // camera distances: full occlusion inside, none beyond
 const SLOW_MS = 25;                              // slower than this for a couple of seconds (under 40 fps) steps quality down
