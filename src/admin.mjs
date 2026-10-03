@@ -12,7 +12,7 @@ const write = s => { try { s ? sessionStorage.setItem(KEY, JSON.stringify(s)) : 
 const changed = () => listeners.forEach(f => f(isAdmin()));
 
 // The same shape the agent-hq admin page stores, built from a Supabase sign-in or refresh answer.
-export function sessionFrom(res, now = Date.now()) {
+function sessionFrom(res, now = Date.now()) {
   if (!res || typeof res.access_token !== 'string' || typeof res.refresh_token !== 'string') return null;
   return { accessToken: res.access_token, refreshToken: res.refresh_token, expiresAt: now + (res.expires_in || 3600) * 1000, email: res.user?.email || '' };
 }

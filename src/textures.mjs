@@ -60,49 +60,6 @@ export const panelSkin = hex => skin('panel' + hex, (x, h, s, r) => {
   for (let k = 0; k < 8; k++) for (const py of [s / 3, (2 * s) / 3]) { rivet(x, h, (k * s) / 8 + 6, py - 7); rivet(x, h, ((k + 1) * s) / 8 - 6, py - 7); }
 });
 
-// A standing-seam metal roof: many fine ribs and a lighter wear pattern.
-export const ribSkin = hex => skin('rib' + hex, (x, h, s, r) => {
-  x.fillStyle = css(hex); x.fillRect(0, 0, s, s);
-  speck(x, s, r, 900, '255,255,255', 0.1); speck(x, s, r, 700, '0,0,0', 0.08);
-  for (let k = 0; k < 16; k++) { const px = (k * s) / 16; x.fillStyle = 'rgba(255,255,255,0.18)'; x.fillRect(px + 3, 0, 2, s); seamV(x, h, px || 1, s, 3); }
-  seamH(x, h, s * 0.5, s, 3); streaks(x, s, r, 10, 0.14);
-});
-
-// Rendered adobe/plaster: soft blotches, fine grain, a few hairline cracks and a dirty foot.
-export const plasterSkin = hex => skin('plaster' + hex, (x, h, s, r) => {
-  x.fillStyle = css(hex); x.fillRect(0, 0, s, s);
-  for (let i = 0; i < 40; i++) { x.fillStyle = `rgba(${r() < 0.5 ? '255,245,225' : '40,25,12'},${0.04 + r() * 0.07})`; x.beginPath(); x.arc(r() * s, r() * s, 12 + r() * 36, 0, 7); x.fill(); }
-  speck(x, s, r, 2200, '255,255,255', 0.1, 1.5); speck(x, s, r, 2200, '0,0,0', 0.12, 1.5);
-  for (let i = 0; i < 6; i++) {
-    let px = r() * s, py = r() * s * 0.6; x.strokeStyle = 'rgba(30,18,10,0.35)'; x.lineWidth = 1; x.beginPath(); x.moveTo(px, py);
-    for (let j = 0; j < 6; j++) { px += (r() - 0.5) * 18; py += 6 + r() * 14; x.lineTo(px, py); } x.stroke();
-  }
-  for (let i = 0; i < 400; i++) { h.fillStyle = `rgba(${r() < 0.5 ? 200 : 60},${r() < 0.5 ? 200 : 60},60,0.25)`; h.fillRect(r() * s, r() * s, 2, 2); }
-  streaks(x, s, r, 12, 0.16); fadeBottom(x, s, 0.34);
-});
-
-// A segmented dome: meridian and ring seams with a darker sheen towards the rim.
-export const domeSkin = hex => skin('dome' + hex, (x, h, s, r) => {
-  x.fillStyle = css(hex); x.fillRect(0, 0, s, s);
-  speck(x, s, r, 1000, '255,255,255', 0.07); speck(x, s, r, 1000, '0,0,0', 0.09);
-  for (let k = 0; k <= 12; k++) seamV(x, h, (k * s) / 12 || 1, s);
-  for (const py of [s * 0.3, s * 0.55, s * 0.8]) seamH(x, h, py, s);
-  streaks(x, s, r, 8, 0.12);
-});
-
-// Roof shingles in offset rows, each a little different in tone.
-export const shingleSkin = hex => skin('shingle' + hex, (x, h, s, r) => {
-  const rows = 10, cols = 8, rh = s / rows, cw = s / cols;
-  for (let j = 0; j < rows; j++) for (let k = -1; k < cols; k++) {
-    const px = k * cw + (j % 2 ? cw / 2 : 0), tone = r() * 0.16 - 0.08;
-    x.fillStyle = css(hex); x.fillRect(px, j * rh, cw, rh);
-    x.fillStyle = tone > 0 ? `rgba(255,255,255,${tone})` : `rgba(0,0,0,${-tone})`; x.fillRect(px, j * rh, cw, rh);
-    x.fillStyle = 'rgba(10,8,6,0.4)'; x.fillRect(px, j * rh + rh - 2, cw, 2); x.fillRect(px, j * rh, 1.5, rh);
-    h.fillStyle = '#303030'; h.fillRect(px, j * rh + rh - 3, cw, 3); h.fillStyle = '#a0a0a0'; h.fillRect(px + 1, j * rh, cw - 2, 3);
-  }
-  speck(x, s, r, 900, '0,0,0', 0.1);
-});
-
 // Solar cells: a grid of dark glass cells with pale busbars, tinted by the instance colour.
 export const solarSkin = hex => skin('solar' + hex, (x, h, s, r) => {
   x.fillStyle = css(hex); x.fillRect(0, 0, s, s);
@@ -113,22 +70,6 @@ export const solarSkin = hex => skin('solar' + hex, (x, h, s, r) => {
     x.fillStyle = 'rgba(255,255,255,0.4)'; for (const f of [0.33, 0.66]) x.fillRect(i * c + 2, j * c + c * f, c - 4, 1);
   }
   for (let i = 0; i <= n; i++) { seamV(x, h, i * c || 1, s, 3); seamH(x, h, i * c || 1, s, 3); }
-});
-
-// Wooden crates: boards, a cross brace, corner brackets and worn edges. Pale, so the instance colour tints it.
-export const crateSkin = hex => skin('crate' + hex, (x, h, s, r) => {
-  x.fillStyle = css(hex); x.fillRect(0, 0, s, s);
-  const boards = 5, bh = s / boards;
-  for (let j = 0; j < boards; j++) {
-    x.fillStyle = `rgba(0,0,0,${0.03 + r() * 0.08})`; x.fillRect(0, j * bh, s, bh);
-    for (let g = 0; g < 18; g++) { x.fillStyle = 'rgba(60,40,20,0.12)'; x.fillRect(r() * s, j * bh + r() * bh, 20 + r() * 60, 1); }
-    seamH(x, h, j * bh || 1, s, 3);
-  }
-  x.strokeStyle = 'rgba(40,28,16,0.45)'; x.lineWidth = 9; x.strokeRect(10, 10, s - 20, s - 20);
-  x.beginPath(); x.moveTo(14, 14); x.lineTo(s - 14, s - 14); x.moveTo(s - 14, 14); x.lineTo(14, s - 14); x.stroke();
-  h.strokeStyle = '#b0b0b0'; h.lineWidth = 9; h.strokeRect(10, 10, s - 20, s - 20);
-  for (const [px, py] of [[16, 16], [s - 16, 16], [16, s - 16], [s - 16, s - 16]]) rivet(x, h, px, py, 4);
-  speck(x, s, r, 800, '0,0,0', 0.1);
 });
 
 // Speckled poured concrete for plinths and bases.

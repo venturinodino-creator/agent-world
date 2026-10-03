@@ -1,41 +1,47 @@
 # Agent World
 
-A 3D world where the agents behind my GitHub repos live and work, inspired by a video of a glossy,
-cartoon "world of agents". Each active repo is a hexagon island whose outline shows its health. Every GitHub
-Actions workflow is a glossy tower with a little robot beside it; Claude, the auto-commit bot, me and each
-Cowork/local agent have their own building and character. A tall hub tower sits in the middle.
+A 3D world where the agents behind my GitHub repos live and work, inspired by a video of a glossy, cartoon "world of
+agents". Each active repo is a hexagon island with its own base in the middle and a floor pattern of its own. Every
+agent (a GitHub Actions workflow, Claude, the auto-commit bot, me, a Cowork task) has a building and one astronaut. A
+tall rocket stands on the hub in the middle.
 
-It is an experiment. It only reads the public `data.json` that the `agent-hq` dashboard publishes (read-only),
-so it shows exactly the repos that dashboard shows and never changes it.
+It is an experiment. It only reads the public `data.json` that the `agent-hq` dashboard publishes (read-only), so it
+shows exactly the repos that dashboard shows and never changes it.
 
 - Live: https://venturinodino-creator.github.io/agent-world/
-- Data: https://venturinodino-creator.github.io/agent-hq/data.json (refreshed every few minutes while the page is open)
+- Data: https://venturinodino-creator.github.io/agent-hq/data.json (reloaded while the page is open)
 
 ## Using it
 
+- **Overview panel** (right, wide windows): the totals (working, asleep, failing), a one-line verdict, the agents that need
+  attention and every repo with a small bar of its mix, the ones to look at first on top. Click a repo or an agent to fly there.
 - **Drag** to orbit, **right-drag** to pan, **wheel** to zoom, **fit** to frame the whole world again.
-- **fx** switches the render effects (ambient occlusion, bloom, depth blur) on or off. They start on and turn themselves
-  off if the machine cannot keep up; the button remembers your choice. `?fx=1` or `?fx=0` forces them for one visit.
-- **Click** a tower or robot (or an entry in the list on the right): the camera glides to it and a card shows
-  what it is, its latest result, recent runs and an **Open** button to GitHub.
+- **Click** a building or astronaut: the camera glides to it and a card shows what it is, its latest result, recent runs
+  and an **Open** button to GitHub.
+- **fx** switches the render effects (ambient occlusion, bloom, depth blur). They start on and turn themselves off if the
+  machine cannot keep up; the button remembers your choice. `?fx=1` or `?fx=0` forces them for one visit.
 - **dormant** shows quiet repos (30+ days) as small, dark, closed islands.
 
-## What moves
+## What it shows
 
-Behaviour comes from real status: running agents keep picking things up at their building and carrying them to the base in the middle of their hexagon (sparks and a big working bubble over them), and every
-agent that is not working, however it ended or whatever it is waiting for, lies down asleep with a big zzz (a failing one keeps a flashing
-red !). There is nothing in between, and nobody walks around with nothing to do. Plumbing workflows (Pages deploys, smoke
-checks, CI) are left out, see `skipWorkflows` in `src/config.mjs`. A crowded island keeps only low things on its free tiles. Islands are packed like a honeycomb around the hub rocket. Every
-agent is one astronaut at its own building, and nobody else walks around. The last 24 hours of commits and workflow
-runs replay on a four-minute loop: a speech bubble pops up over the agent involved, its astronaut wakes, carries a crate to
-the headquarters (which lights up) and walks back, a page flies to the hub, and the activity feed lists it.
-(Browsers pause animation in background tabs; it resumes when you switch back.)
+There are two states, and nothing in between. A **working** agent (a run is going on right now) keeps picking something
+up at its building, carrying it to the base in the middle of its island and walking back, with sparks and a working
+bubble over it. Every other agent, whatever it is waiting for, lies asleep with a big zzz; one whose last run failed also
+keeps a flashing red "!". The astronaut's suit shows the kind of agent: orange for workflows, pink for Claude, red for
+the bot, violet for Cowork, blue for me.
+
+The last 24 hours of commits and workflow runs replay on a four-minute loop: a speech bubble pops up over the agent
+involved, its astronaut wakes, carries a crate to the base (which lights up) and lies back down, a page flies to the
+hub, and the activity feed lists it. Browsers pause animation in background tabs; it resumes when you switch back.
+
+Plumbing workflows (Pages deploys, smoke checks, CI) are not agents and are left out: see `skipWorkflows` in
+`src/config.mjs`. A crowded island keeps only low things on its free tiles so the astronauts stay in view.
 
 ## Cowork / local agents
 
-GitHub cannot see agents that run elsewhere, so they are listed by hand in `src/config.mjs`. They are shown
-asleep and marked as not tracked live. Give an agent a `startUrl` there to point its **Open in Cowork** button
-(Admin only) at the right place.
+GitHub cannot see agents that run elsewhere, so they are listed by hand in `src/config.mjs`. They are shown asleep and
+marked as not tracked live. Give an agent a `startUrl` there to point its **Open in Cowork** button (Admin only) at the
+right place.
 
 ## Activate (Admin only)
 
@@ -53,16 +59,23 @@ are switched ON in the admin list.
 
 ## How it is built
 
-Plain HTML, CSS and ES modules, no build step. 3D uses [three.js](https://threejs.org) loaded from a pinned
-version on the jsDelivr CDN, so the page needs an internet connection and a browser with WebGL. All models are
-built from simple shapes in code; there are no image or model files.
+Plain HTML, CSS and ES modules, no build step, hosted on GitHub Pages (a push to `main` deploys). 3D uses
+[three.js](https://threejs.org) loaded from a pinned version on the jsDelivr CDN, so the page needs an internet
+connection and a browser with WebGL. Every model and texture is drawn in code; there are no image or model files.
 
-`src/world.mjs` (islands, agents and events) and `src/anim.mjs` (poses and the replay clock) are pure and tested.
-`src/models.mjs` and `src/scene.mjs` are the 3D look; `src/main.mjs` wires the page together.
+| Area | Files |
+| --- | --- |
+| Pure logic, tested without a browser | `world.mjs` (islands, agents, events, designs), `anim.mjs` (poses, the work cycle, the replay clock), `overview.mjs` (manager totals), `activation.mjs`, `data.mjs`, `feed.mjs` |
+| Page | `main.mjs` (wires everything), `list.mjs` (overview panel), `panel.mjs` (agent card), `admin.mjs`, `requests.mjs`, `config.mjs`, `index.html`, `style.css` |
+| 3D | `scene.mjs`, `post.mjs` (effects), `space.mjs` (sky, planet, ground), `kit.mjs` (materials and merging), `buildings.mjs`, `bases.mjs`, `decor.mjs`, `models.mjs` (astronauts, symbols), `textures.mjs`, `grounding.mjs` |
 
 ## Develop
 
 ```bash
-node --test            # tests for the world model, animation clock and data loader
+node --test            # the pure logic: world model, animation, overview, activation, data loader
 python -m http.server  # then open http://localhost:8000
 ```
+
+Add `?debug` to the page address to get `window.__stats()` (draw calls and triangles), `window.__root()` and
+`window.__edges()` (where the island edges land on screen) in the browser console. The terms used here are defined in
+`GLOSSARY.md`.

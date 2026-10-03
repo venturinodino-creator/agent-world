@@ -13,8 +13,8 @@ const blobTexture = () => {
   return tex;
 };
 
-export const blobMaterial = opacity => new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
-export const blobGeometry = radius => new THREE.CircleGeometry(radius, 20).rotateX(-Math.PI / 2);
+const blobMaterial = opacity => new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, opacity, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+const blobGeometry = radius => new THREE.CircleGeometry(radius, 20).rotateX(-Math.PI / 2);
 
 // A disc that moves with something (a building or a character) and sits just above the floor.
 export function addBlob(parent, radius, y = 0.03, opacity = 0.55) {

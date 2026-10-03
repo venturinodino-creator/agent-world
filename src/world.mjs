@@ -2,7 +2,7 @@
 // hexagon islands (one per repo), the agents standing on them and the recent events. Pure (no DOM, no
 // network), so the same input always gives the same world and it can be tested without a browser.
 // Positions are on the ground plane (x, z) in tile sizes; a tile is a hexagon with circumradius 1.
-export const DAY = 864e5;
+const DAY = 864e5;
 const DORMANT_DAYS = 30;     // matches the agent-hq legend: dormant = quiet for more than 30 days
 const RUNNING_WINDOW = 30 * 60e3;   // a commit this fresh means the committer is working right now
 const RECENT = 5;            // recent items kept per agent for the detail card
@@ -23,7 +23,7 @@ const byName = (a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
 const ms = iso => new Date(iso).getTime();
 const round = v => Math.round(v * 1000) / 1000;
 
-export function runResult(run) {
+function runResult(run) {
   if (run.status !== 'completed') return 'running';
   return run.concl === 'success' ? 'succeeded' : run.concl === 'failure' ? 'failed' : (run.concl || 'no result');
 }

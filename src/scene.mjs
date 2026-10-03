@@ -1,7 +1,7 @@
 // The 3D scene: renderer, camera, lights, sunny desert and sky, floating rocks, hexagon islands with their
 // buildings and robots, the hub, picking and the camera glide. What exists comes from the world model and
 // how it moves comes from anim.mjs; this file decides how it looks. Browser only (needs WebGL).
-import { THREE, STATUS, HEALTH, PALETTE, buildRobot, buildingFor, buildHub, symbolSprite, workingIcon, sleepSprite, bakeStatics } from './models.mjs';
+import { THREE, HEALTH, PALETTE, buildRobot, buildingFor, buildHub, symbolSprite, workingIcon, sleepSprite, bakeStatics } from './models.mjs';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { skyDome, planets, alienGround, alienProps } from './space.mjs';
@@ -69,8 +69,9 @@ function rimGeometry(outer, width) {
 
 // Returns null when the browser cannot start WebGL.
 // `fx` is true or false to force the effects (ambient occlusion, bloom, tilt-shift) on or off, or null to start them
-// on and let them switch themselves off when the machine cannot keep up. `onFxAuto` hears about that switch-off.
-export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) {
+// on and let them switch themselves off when the machine cannot keep up. `onFxAuto` hears about that switch-off, and
+// `onContext(lost)` hears when the browser takes the graphics context away (out of graphics memory) and gives it back.
+export function createScene(container, { fx = null, onFxAuto = () => {}, onContext = () => {} } = {}) {
   let renderer;
   try { renderer = new THREE.WebGLRenderer({ antialias: true }); } catch { return null; }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
@@ -78,6 +79,8 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
   container.appendChild(renderer.domElement);
+  renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); onContext(true); });
+  renderer.domElement.addEventListener('webglcontextrestored', () => onContext(false));
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(FOG); scene.fog = new THREE.FogExp2(FOG, 0.0030);

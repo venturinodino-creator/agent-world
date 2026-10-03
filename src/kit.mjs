@@ -3,7 +3,7 @@
 // There are no model or image files to load.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { panelSkin, solarSkin, crateSkin, concreteSkin, fabricSkin, visorSkin, glassSkin, flagSkin } from './textures.mjs';
+import { panelSkin, concreteSkin, glassSkin } from './textures.mjs';
 
 export const PALETTE = { white: 0xf3f6ff, ice: 0xa9d3ff, iceDark: 0x78b4f0, blue: 0x3b72f2, red: 0xe2493a, teal: 0x2fb89b,
   brown: 0x7a4130, terracotta: 0xe08a4a, slate: 0x2c3050, yellow: 0xf2c94c, orange: 0xf0a030, grey: 0x8f97a3 };
@@ -114,5 +114,5 @@ const padOf = (put, r = 0.52) => put(C(r, r + 0.03, 0.05), skinned(concreteSkin(
 const statusMats = status => { const s = STATUS[status] || STATUS.ok; return { band: toy(s.body, { roughness: 0.35, metalness: 0.2 }, true), ring: glow(s.glow, 1.1) }; };
 
 
-export { BOT, make, shared, glowShared, paint, toy, glow, skinned, flatten, mesh, DARK, HULL, HULL_D, STEEL, BLUE, ORANGE, DARKM,
+export { shared, glowShared, paint, toy, glow, skinned, flatten, mesh, ORANGE,
   hull, hullD, steel, blueM, orangeM, darkM, glassM, C, B, adder, padOf, statusMats, THREE };

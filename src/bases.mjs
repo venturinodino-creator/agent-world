@@ -106,5 +106,5 @@ function reactor(status, scale) {
 }
 
 // Design 0 is the glass-dome base; the others follow in the order above. One per island, wrapping round.
-export const BASES = [buildBase, tower, hangarBase, ringStation, ziggurat, solarBase, reactor];
+const BASES = [buildBase, tower, hangarBase, ringStation, ziggurat, solarBase, reactor];
 export const baseFor = (design, status, scale) => BASES[design % BASES.length](status, scale);

@@ -21,8 +21,16 @@ A workflow that builds or checks a repo (a Pages deploy, a smoke check, CI) and 
 _Avoid_: Agent
 
 **Failing**:
-An agent whose last run failed.
+An agent whose last run failed. Shown like an asleep one, with a flashing red "!" over it.
 _Avoid_: Broken, errored
+
+**Overview**:
+The panel on the right for someone who wants the picture at a glance: the totals (working, asleep, failing), a one-line verdict, the failing agents, and every repo with a bar of its mix, the ones to look at first on top.
+_Avoid_: Dashboard, thread list
+
+**Design**:
+Which of the seven looks an island has (its base and its floor pattern). Each island takes the next one, so neighbouring islands never match.
+_Avoid_: Theme, skin
 
 **Activate**:
 To get an agent that is not working to start a run now. For a GitHub workflow it starts the run; for an agent outside GitHub it only points the owner to where they can start it.

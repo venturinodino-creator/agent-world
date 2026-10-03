@@ -1,12 +1,11 @@
 // Activate: what a card offers the Admin for an agent that is not working, and the life of a "run requested" from
 // the click until the real run finishes. Pure functions of the agent, the clock and what GitHub last reported, so
 // all of it can be tested without a browser. The browser side (sign-in, calling the server, asking GitHub) is in admin.mjs.
-export const OWNER = 'venturinodino-creator';
 // Only these repos have workflows that can be started by hand; the server enforces the same list.
 export const STARTABLE_REPOS = ['african-earth-energy-crm', 'belgium-crm', 'denmark-crm', 'netherlands-crm'];
 export const COWORK_URL = 'https://claude.ai/';
 export const REQUEST_TTL_MS = 10 * 60e3;   // how long to wait for a requested run to appear on GitHub
-export const KEEP_MS = 2 * 3600e3;         // a request is forgotten this long after the click
+const KEEP_MS = 2 * 3600e3;         // a request is forgotten this long after the click
 const SKEW_MS = 30e3;                      // GitHub's clock and ours may differ a little
 const NOT_STARTABLE_NAMES = new Set(['pages build and deployment']);
 

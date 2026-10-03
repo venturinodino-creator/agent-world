@@ -3,7 +3,7 @@
 import { THREE, PALETTE, toy, skinned, mesh, paint, flatten } from './kit.mjs';
 import { fabricSkin, visorSkin } from './textures.mjs';
 export { PALETTE, STATUS, HEALTH, bakeStatics } from './kit.mjs';
-export { buildPod, buildHub, buildingFor } from './buildings.mjs';
+export { buildHub, buildingFor } from './buildings.mjs';
 
 // An astronaut for every agent: a chunky suit in a saturated colour that tells the kind of agent apart and stands out
 // from the white and grey buildings (orange for workflows, pink for Claude, red for the bot, violet for Cowork, blue for

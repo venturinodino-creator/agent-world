@@ -1,2 +1,10 @@
 .claude/
 .claude-flow/
+.swarm/
+.mcp.json
+node_modules/
+*.log
+.env
+.env.*
+.DS_Store
+Thumbs.db

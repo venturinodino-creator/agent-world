@@ -48,11 +48,11 @@ try { fxSaved = localStorage.getItem('world.fx'); } catch { /* storage blocked: 
 const fxForce = fxParam === '1' ? true : fxParam === '0' ? false : fxSaved === 'on' ? true : fxSaved === 'off' ? false : null;
 if (new URLSearchParams(location.search).has('debug')) {   // for measuring: ?debug
   window.__stats = () => scene?.stats(); window.__root = () => scene?.debugRoot();
-  window.__edges = () => state.world.islands.flatMap(i => [[-1, 0], [1, 0], [0, -1], [0, 1]].map(([dx, dz]) => ({ island: i.name || i.id, ...scene.project(i.x + dx * i.radius, 0, i.z + dz * i.radius) })));
+  window.__edges = () => (state.world?.islands ?? []).flatMap(i => [[-1, 0], [1, 0], [0, -1], [0, 1]].map(([dx, dz]) => ({ island: i.name || i.id, ...scene.project(i.x + dx * i.radius, 0, i.z + dz * i.radius) })));
 }
 const showFx = () => { $('#btnFx').textContent = 'fx: ' + (scene?.fxOn() ? 'on' : 'off'); };
 let scene = null;
-try { scene = (await import('./scene.mjs')).createScene($('#stage'), { fx: fxForce, onFxAuto: showFx }); }
+try { scene = (await import('./scene.mjs')).createScene($('#stage'), { fx: fxForce, onFxAuto: showFx, onContext: lost => message(lost ? 'The graphics card ran out of memory and the 3D view stopped. Close other heavy tabs and reload this page.' : '') }); }
 catch { message('Could not load the 3D engine. It needs a connection to cdn.jsdelivr.net, so check your network and reload.'); }
 if (!scene && !$('#banner').textContent) message('This browser could not start WebGL, which the 3D world needs. Try a current Chrome, Edge, Firefox or Safari.');
 

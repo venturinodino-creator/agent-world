@@ -236,7 +236,7 @@ function buildCabin(status) {
 }
 
 // Satellite dish on a round base, for Cowork agents: a big white dish on a yoke, with a feed arm.
-export function buildDish(status) {
+function buildDish(status) {
   const g = new THREE.Group(), put = adder(g), { band, ring } = statusMats(status);
   put(C(0.34, 0.38, 0.12, 20), skinned(concreteSkin(0x6a7080), { roughness: 0.9 }), 0, 0.06, 0);
   put(C(0.3, 0.34, 0.12, 20), hullD(), 0, 0.17, 0);
@@ -272,7 +272,6 @@ export function buildBase(status, scale = 1) {
   g.userData.mats = { body: band, ring };
   return g;
 }
-export { buildBase as buildPod };
 
 // The hub in the middle of the world: the same slim rocket, much bigger, on a landing pad, that pages fly up to.
 // `ring` is the glow (the pad's light ring and the round windows) and `orb` the beacon on the nose; the scene pulses both.

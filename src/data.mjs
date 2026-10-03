@@ -1,7 +1,7 @@
 // Loads the public data.json that the agent-hq dashboard publishes. Read-only: nothing here ever writes
 // to agent-hq. Both copies are read and the newer one wins, because the raw GitHub copy updates
 // a minute or two before the Pages copy.
-export const SOURCES = [
+const SOURCES = [
   'https://venturinodino-creator.github.io/agent-hq/data.json',
   'https://raw.githubusercontent.com/venturinodino-creator/agent-hq/main/data.json',
 ];
