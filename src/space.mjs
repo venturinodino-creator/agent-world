@@ -1,5 +1,5 @@
 // The setting: an alien planet. Violet, magenta and rust terrain with striped rock layers, mesas, ridges and glowing teal
-// canyons; clusters of glowing crystals, rock spires and luminous plants; under a nebula sky with a huge ringed gas giant
+// canyons; clusters of glowing crystals and luminous plants; under a nebula sky with a huge ringed gas giant
 // and two moons. Browser only (it builds three.js objects).
 import * as THREE from 'three';
 import { alienSkin, veinsMap, planetMap, ringMap } from './textures.mjs';
@@ -106,10 +106,10 @@ export function alienGround(R) {
   return m;
 }
 
-// What grows and sticks out of the ground, beyond the islands: clusters of glowing crystals in three colours, tall rock
-// spires, and luminous plants (a stalk with a glowing bulb). All instanced, so about seven draw calls in total.
+// What grows out of the ground around the islands: clusters of glowing crystals in three colours and luminous plants
+// (a stalk with a glowing bulb). All instanced, so about six draw calls in total.
 export function alienProps(R) {
-  const group = new THREE.Group(), rnd = lcg(33), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
+  const group = new THREE.Group(), rnd = lcg(33), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3(), p = new THREE.Vector3();
   const spot = (minD, maxD) => { const a = rnd() * Math.PI * 2, d = minD + (maxD - minD) * rnd() ** 1.8; return [Math.cos(a) * d, Math.sin(a) * d]; };
   const place = (mesh, i, x, z, lift, s, tilt) => {
     e.set((rnd() - 0.5) * tilt, rnd() * 6.28, (rnd() - 0.5) * tilt); q.setFromEuler(e);
@@ -129,16 +129,6 @@ export function alienProps(R) {
     }
   }
   crystals.forEach((mesh, i) => { mesh.count = nCrystal[i]; mesh.instanceMatrix.needsUpdate = true; group.add(mesh); });
-
-  // rock spires, striped by tinting each a slightly different purple or rust
-  const spireGeo = new THREE.CylinderGeometry(0.5, 1.2, 1, 7); spireGeo.translate(0, 0.5, 0);
-  const spires = new THREE.InstancedMesh(spireGeo, new THREE.MeshStandardMaterial({ roughness: 0.92, flatShading: true }), 44);
-  for (let i = 0; i < 44; i++) {
-    const [x, z] = spot(R + 18, R + 260), w = 1.4 + rnd() * 3.2;
-    place(spires, i, x, z, -1, [w, 5 + rnd() * 17, w], 0.12);
-    spires.setColorAt(i, col.setHex([0x6a4a8c, 0x8a4a78, 0xa8603e, 0x57407a][Math.floor(rnd() * 4)]));
-  }
-  spires.instanceMatrix.needsUpdate = true; spires.instanceColor.needsUpdate = true; group.add(spires);
 
   // luminous plants: a dark stalk and a glowing bulb on top, in teal and pink
   const stalkGeo = new THREE.CylinderGeometry(0.035, 0.06, 1.2, 5), bulbGeo = new THREE.SphereGeometry(0.2, 8, 6); stalkGeo.translate(0, 0.6, 0);

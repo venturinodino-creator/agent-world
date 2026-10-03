@@ -290,15 +290,6 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     // the buildings never move, so their shared-material parts are merged across the whole world (see bakeStatics)
     bakeStatics(root, S.pickables.filter(o => o.userData.mats));
 
-    // drifting dark rocks above the world
-    const rnd = lcg(7);
-    for (let i = 0; i < 16; i++) {
-      const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5 + rnd() * 1.2, 0), new THREE.MeshStandardMaterial({ color: 0x5a4678, roughness: 0.95, flatShading: true }));
-      const a = rnd() * Math.PI * 2, d = R * (1.1 + rnd() * 0.9), y = 1 + rnd() * 10;
-      rock.position.set(Math.cos(a) * d, y, Math.sin(a) * d); rock.castShadow = true; rock.userData = { y, ph: rnd() * 6, spin: 0.1 + rnd() * 0.3 };
-      root.add(rock); S.rocks.push(rock);
-    }
-
     sun.position.set(R * 0.9, R * 0.85, R * 0.45);
     const sc = sun.shadow.camera; sc.left = -R - 8; sc.right = R + 8; sc.top = R + 8; sc.bottom = -R - 8; sc.near = 1; sc.far = R * 5; sc.updateProjectionMatrix();
     if (refit) fit(true);
