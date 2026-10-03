@@ -4,12 +4,12 @@
 import { THREE, STATUS, HEALTH, PALETTE, buildPod, buildRobot, buildingFor, buildHub, symbolSprite, workingIcon, sleepSprite, bakeStatics } from './models.mjs';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { panelSkin, solarSkin, crateSkin, fabricSkin, visorSkin } from './textures.mjs';
+import { panelSkin, solarSkin, crateSkin } from './textures.mjs';
 import { skyDome, planets, alienGround, alienProps } from './space.mjs';
 import { createPost } from './post.mjs';
-import { addBlob, blobGeometry, blobMaterial } from './grounding.mjs';
+import { addBlob } from './grounding.mjs';
 import { tileOffsets } from './world.mjs';
-import { pose, hash, errand, routeBot } from './anim.mjs';
+import { pose, hash, errand } from './anim.mjs';
 
 const WALK_UNITS = 0.5 / 14;          // pose offsets are in old pixel units; this turns them into tiles
 const RESULT_HEX = { ok: 0x41e08a, fail: 0xff5d6c, running: 0x3fd7e8 };
@@ -133,7 +133,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
   // ----- building the world
   function clear() {
     S.root.traverse(o => { o.geometry?.dispose?.(); [].concat(o.material || []).forEach(m => { if (!m.map?.userData?.keep) m.map?.dispose?.(); m.dispose(); }); });
-    S.root.clear(); S.agents.clear(); S.hqs.clear(); S.pickables = []; S.rocks = []; S.bots = null; S.papers.forEach(p => p.removeFromParent()); S.papers.clear();
+    S.root.clear(); S.agents.clear(); S.hqs.clear(); S.pickables = []; S.rocks = []; S.papers.forEach(p => p.removeFromParent()); S.papers.clear();
   }
 
   // Props scattered on the empty tiles: solar-panel fields, crate stacks and tanks, so islands look lived in.
@@ -162,71 +162,6 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     add(panel, panels, () => 0.3, () => PALETTE.blue, (p, e) => e.set(-0.45, 0.3, 0), solarSkin(0xffffff));
     add(crate, crates, () => 0.27, p => p[2], (p, e, i) => e.set(0, i * 0.7, 0), crateSkin(0xf4f1ec));
     add(tank, tanks, () => 0.32, () => 0xc9ced8, (p, e) => e.set(0, 0, 0), panelSkin(0xffffff));
-  }
-
-  // Little workers shuttling between the buildings and each island's headquarters all day: out with a crate,
-  // back empty-handed. Each has a body, head, hard hat, two walking legs and two swinging arms (instanced).
-  // Buildings that are working right now get extra helpers that run faster, so busy places look busy.
-  function ambientBots(world) {
-    const list = [], rnd = lcg(5), crateColors = [PALETTE.orange, 0xd9dde4, PALETTE.blue, PALETTE.grey];
-    const VEST = [0xff9a3c, 0xdbeaff, 0xff5a5a, 0x9fcdf5, 0xffd23c, 0x41e0a0], HAT = [0xffd23c, 0xff9a3c, 0xff5a5a, 0x3b72f2, 0xf3f6ff];
-    const route = (isl, ax, az, sp, ph) => {
-      const dx = ax - isl.x, dz = az - isl.z, len = Math.hypot(dx, dz) || 1;
-      list.push({ isl: isl.name, ax, az, bx: isl.x + (dx / len) * 1.5, bz: isl.z + (dz / len) * 1.5, side: rnd() < 0.5 ? 1 : -1, sp, ph,
-        vest: VEST[Math.floor(rnd() * VEST.length)], hat: HAT[Math.floor(rnd() * HAT.length)], crate: crateColors[Math.floor(rnd() * 4)] });
-    };
-    world.islands.forEach(isl => {
-      if (isl.dormant) return;
-      const tiles = tileOffsets(isl.rings).slice(1), n = Math.min(90, 12 + Math.round(isl.agentCount * 2.5));
-      for (let i = 0; i < n; i++) {
-        const t = tiles[Math.floor(rnd() * tiles.length)];
-        route(isl, isl.x + t.x + (rnd() - 0.5) * 0.5, isl.z + t.z + (rnd() - 0.5) * 0.5, 0.07 + rnd() * 0.07, rnd() * 2);
-      }
-    });
-    for (const a of world.agents) {
-      if (a.status !== 'running') continue;
-      const isl = world.islands.find(i => i.name === a.island);
-      for (let k = 0; k < 3; k++) route(isl, a.pos.x + (rnd() - 0.5) * 0.4, a.pos.z + 0.7, 0.2 + rnd() * 0.08, rnd() * 2);
-    }
-    if (!list.length) return;
-    // The crew are small astronauts: white suits, round helmets with dark glass visors, ear pods and backpacks, and a stripe
-    // in their own colour at the chest. Each gets a slightly different height (own random stream, so the routes stay the same).
-    const dress = lcg(41);
-    list.forEach(b => { b.scale = 0.94 + dress() * 0.14; });
-    const N = list.length, cloth = fabricSkin(), crateTex = crateSkin(0xf4f1ec), glass = visorSkin();
-    const mat = (extra = {}) => new THREE.MeshStandardMaterial({ roughness: 0.5, ...extra });
-    const fabric = (rough = 0.8) => mat({ roughness: rough, map: cloth.map, bumpMap: cloth.bumpMap, bumpScale: 0.6 });
-    const parts = {
-      body: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.09, 0.17, 2, 8), fabric(), N),
-      helmet: new THREE.InstancedMesh(new THREE.SphereGeometry(0.15, 10, 8), mat({ roughness: 0.22, metalness: 0.08 }), N),
-      visor: new THREE.InstancedMesh(new THREE.SphereGeometry(0.153, 10, 6, Math.PI / 2 - 0.95, 1.9, Math.PI / 2 - 0.78, 1.3),
-        mat({ roughness: 0.1, metalness: 0.5, map: glass.map, emissiveMap: glass.map, emissive: 0xffffff, emissiveIntensity: 0.35 }), N),
-      ears: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.04, 0.04, 0.06, 6).rotateZ(Math.PI / 2), fabric(), N * 2),
-      legs: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.04, 0.036, 0.24, 6), fabric(), N * 2),
-      boots: new THREE.InstancedMesh(new THREE.BoxGeometry(0.075, 0.06, 0.12), mat({ roughness: 0.6 }), N * 2),
-      arms: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.034, 0.12, 1, 5), fabric(), N * 2),
-      hands: new THREE.InstancedMesh(new THREE.SphereGeometry(0.04, 5, 4), fabric(0.7), N * 2),
-      belt: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.096, 0.096, 0.03, 8), mat({ roughness: 0.5 }), N),
-      stripe: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.0955, 0.0955, 0.03, 8), mat({ roughness: 0.4, metalness: 0.15 }), N),
-      pack: new THREE.InstancedMesh(new THREE.BoxGeometry(0.14, 0.18, 0.08), fabric(0.85), N),
-      crate: new THREE.InstancedMesh(new THREE.BoxGeometry(0.25, 0.25, 0.25), mat({ roughness: 0.7, map: crateTex.map, bumpMap: crateTex.bumpMap, bumpScale: 1.2 }), N),
-      blob: new THREE.InstancedMesh(blobGeometry(0.17), blobMaterial(0.5), N),   // contact shadow under each worker
-    };
-    parts.blob.renderOrder = 1;
-    const c = new THREE.Color(), WHITE = 0xf3f5f9;
-    list.forEach((b, i) => {
-      parts.body.setColorAt(i, c.setHex(WHITE)); parts.helmet.setColorAt(i, c.setHex(0xffffff)); parts.visor.setColorAt(i, c.setHex(0xffffff));
-      parts.pack.setColorAt(i, c.setHex(0xe4e9f0)); parts.belt.setColorAt(i, c.setHex(0x8b94a3)); parts.stripe.setColorAt(i, c.setHex(b.vest));
-      parts.crate.setColorAt(i, c.setHex(b.crate));
-      for (const k of [0, 1]) {
-        parts.ears.setColorAt(i * 2 + k, c.setHex(0xcfd6e0)); parts.arms.setColorAt(i * 2 + k, c.setHex(WHITE)); parts.hands.setColorAt(i * 2 + k, c.setHex(0xdfe4ec));
-        parts.legs.setColorAt(i * 2 + k, c.setHex(0xeef1f6)); parts.boots.setColorAt(i * 2 + k, c.setHex(0xdde2ea));
-      }
-    });
-    // only the body and crate cast shadows; the many thin parts would just cost frames
-    Object.entries(parts).forEach(([name, im]) => { im.castShadow = name === 'body' || name === 'crate'; S.root.add(im); });
-    S.bots = { list, parts, base: new THREE.Matrix4(), local: new THREE.Matrix4(), out: new THREE.Matrix4(), q: new THREE.Quaternion(), qs: new THREE.Quaternion(),
-      p: new THREE.Vector3(), sc: new THREE.Vector3(), one: new THREE.Vector3(1, 1, 1), hide: new THREE.Vector3(0.001, 0.001, 0.001), ax: new THREE.Vector3(1, 0, 0) };
   }
 
   function setWorld(world, { refit = false } = {}) {
@@ -263,7 +198,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       pads.forEach(([x, z, s, col], i) => { m.compose(new THREE.Vector3(x, 0.14, z), new THREE.Quaternion(), new THREE.Vector3(s, 1, s)); im.setMatrixAt(i, m); im.setColorAt(i, c.set(col).offsetHSL(0, 0, 0.07)); });
       im.receiveShadow = true; root.add(im);
     }
-    scatterProps(world); ambientBots(world);
+    scatterProps(world);
 
     for (const a of world.agents) {
       const isl = world.islands.find(i => i.name === a.island), ph = hash(a.id);
@@ -332,7 +267,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
   }
 
   // ----- per-frame animation
-  const paperGeo = new THREE.BoxGeometry(0.22, 0.28, 0.02), tmp = new THREE.Vector3(), eul = new THREE.Euler();
+  const paperGeo = new THREE.BoxGeometry(0.22, 0.28, 0.02), tmp = new THREE.Vector3();
   // The errand this agent is on right now (the newest one that has started), with how far along it is.
   const errandFor = (list, id, t) => {
     let best = null;
@@ -385,48 +320,6 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     }
 
     for (const hq of S.hqs.values()) hq.mats.ring.emissiveIntensity = 1.0 + Math.max(0, 1 - (t - hq.last) / 0.7) * 1.8;
-
-    if (S.bots) {
-      const { list, parts, base, local, out, q, qs, p, sc, one, hide, ax } = S.bots;
-      // a part placed relative to the worker: translate to its joint, swing about x, then offset to the part's centre
-      const put = (im, idx, x, y, z, swing, dy, scale = one) => {
-        qs.setFromAxisAngle(ax, swing); local.compose(p.set(x, y, z), qs, scale);
-        if (dy) local.multiply(out.makeTranslation(0, dy, 0));
-        im.setMatrixAt(idx, out.multiplyMatrices(base, local));
-      };
-      const turn = (S.frame || 0) & 1;   // half the workers move on even frames, half on odd ones
-      list.forEach((b, i) => {
-        if ((i & 1) !== turn) return;
-        const w = routeBot(b, t), x = b.ax + (b.bx - b.ax) * w.u, z = b.az + (b.bz - b.az) * w.u;
-        const nx = -(b.bz - b.az), nz = b.bx - b.ax, nl = Math.hypot(nx, nz) || 1, sway = Math.sin(w.u * Math.PI) * 0.3 * b.side;
-        const px = x + (nx / nl) * sway, pz = z + (nz / nl) * sway, dir = w.forward ? 1 : -1;
-        const gait = t * 10 + b.ph * 5, bob = Math.abs(Math.sin(gait)) * 0.03;
-        q.setFromEuler(eul.set(0, Math.atan2((b.bx - b.ax) * dir, (b.bz - b.az) * dir), 0));
-        base.compose(p.set(px, 0.14 + bob, pz), q, sc.setScalar(b.scale));
-        const swing = Math.sin(gait) * 0.7, lean = w.carrying ? -0.12 : 0;
-        put(parts.blob, i, 0, 0.055, 0, 0, 0);
-        put(parts.body, i, 0, 0.38, 0, lean, 0);
-        put(parts.helmet, i, 0, 0.66, 0, 0, 0);
-        put(parts.visor, i, 0, 0.66, 0, 0, 0);
-        put(parts.ears, i * 2, -0.155, 0.66, 0, 0, 0);
-        put(parts.ears, i * 2 + 1, 0.155, 0.66, 0, 0, 0);
-        put(parts.legs, i * 2, -0.05, 0.25, 0, swing, -0.12);
-        put(parts.legs, i * 2 + 1, 0.05, 0.25, 0, -swing, -0.12);
-        put(parts.boots, i * 2, -0.05, 0.25, 0, swing, -0.22);                       // boots follow the legs
-        put(parts.boots, i * 2 + 1, 0.05, 0.25, 0, -swing, -0.22);
-        put(parts.belt, i, 0, 0.31, 0, 0, 0);
-        put(parts.stripe, i, 0, 0.42, 0, lean, 0);
-        put(parts.pack, i, 0, 0.42, -0.115, lean, 0);
-        const carry = w.carrying;       // arms hold the crate out in front, otherwise swing
-        put(parts.arms, i * 2, -0.135, 0.47, 0, carry ? -1.2 : -swing, -0.07);
-        put(parts.arms, i * 2 + 1, 0.135, 0.47, 0, carry ? -1.2 : swing, -0.07);
-        put(parts.hands, i * 2, -0.135, 0.47, 0, carry ? -1.2 : -swing, -0.165);
-        put(parts.hands, i * 2 + 1, 0.135, 0.47, 0, carry ? -1.2 : swing, -0.165);
-        put(parts.crate, i, 0, 0.5, 0.19, 0, 0, carry ? one : hide);
-        if (w.forward && w.u > 0.93) { const hq = S.hqs.get(b.isl); if (hq) hq.last = t; }
-      });
-      Object.values(parts).forEach(im => { im.instanceMatrix.needsUpdate = true; });
-    }
 
     S.rocks.forEach(rk => { rk.position.y = rk.userData.y + Math.sin(t * 0.4 + rk.userData.ph) * 0.4; rk.rotation.y += 0.002 * rk.userData.spin; rk.rotation.x += 0.001 * rk.userData.spin; });
 

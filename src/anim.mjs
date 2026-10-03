@@ -46,13 +46,6 @@ export function errand(elapsed) {
   return { u: 1 - (k - 0.6) / 0.4, carrying: false, depositing: false };
 }
 
-// The little workers that shuttle between buildings and the headquarters all day: out with a crate, back
-// empty, forever. `route.sp` is legs per second, `route.ph` how far through the round trip (0..2) it starts.
-export function routeBot(route, t) {
-  const x = (((t * route.sp + route.ph) % 2) + 2) % 2;
-  return x < 1 ? { u: x, carrying: true, forward: true } : { u: 2 - x, carrying: false, forward: false };
-}
-
 // The replay sweeps the last 24 hours of real time in loopMs of wall time, then starts again.
 export function replayClock(elapsedMs, now, loopMs) {
   return now - DAY + ((elapsedMs % loopMs) / loopMs) * DAY;

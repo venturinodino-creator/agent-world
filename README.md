@@ -23,11 +23,10 @@ so it shows exactly the repos that dashboard shows and never changes it.
 ## What moves
 
 Behaviour comes from real status: running agents bounce, type and throw sparks, healthy ones wander, failing ones
-flash red and pace, scheduled Cowork agents sleep. Islands are packed like a honeycomb around the hub tower, and
-little workers shuttle crates between the buildings and each island's headquarters all day. The last 24 hours of
-commits and workflow runs replay on a four-minute loop: a speech bubble pops up over the agent involved, its robot
-carries a crate to the headquarters (which lights up) and walks back, a page flies to the hub, and the activity
-feed lists it.
+flash red and pace, scheduled Cowork agents sleep. Islands are packed like a honeycomb around the hub rocket. Every
+agent is one astronaut at its own building, and nobody else walks around. The last 24 hours of commits and workflow
+runs replay on a four-minute loop: a speech bubble pops up over the agent involved, its astronaut carries a crate to
+the headquarters (which lights up) and walks back, a page flies to the hub, and the activity feed lists it.
 (Browsers pause animation in background tabs; it resumes when you switch back.)
 
 ## Cowork / local agents

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pose, replayClock, due, errand, ERRAND_SECONDS, routeBot } from '../src/anim.mjs';
+import { pose, replayClock, due, errand, ERRAND_SECONDS } from '../src/anim.mjs';
 
 const agent = (status, id = 'repo::agent') => ({ id, status, kind: 'workflow' });
 const times = Array.from({ length: 400 }, (_, i) => i * 0.25);
@@ -82,15 +82,3 @@ test('along an errand the position only goes out and then comes back', () => {
   assert.ok(us.slice(0, peak + 1).every((u, i, a) => i === 0 || u >= a[i - 1]), 'rising on the way out');
   assert.ok(us.slice(peak).every((u, i, a) => i === 0 || u <= a[i - 1]), 'falling on the way back');
 });
-
-test('a worker on a route carries a crate on the way to the headquarters and goes back empty', () => {
-  const route = { sp: 0.1, ph: 0 };
-  assert.deepEqual(routeBot(route, 0), { u: 0, carrying: true, forward: true });
-  const out = routeBot(route, 5);          // half way along the outward leg
-  assert.ok(out.u > 0.4 && out.u < 0.6 && out.carrying && out.forward);
-  const back = routeBot(route, 15);        // half way along the return leg
-  assert.ok(back.u > 0.4 && back.u < 0.6 && !back.carrying && !back.forward);
-  assert.deepEqual(routeBot(route, 20), routeBot(route, 0), 'the route loops');
-  assert.notDeepEqual(routeBot({ sp: 0.1, ph: 3 }, 0), routeBot(route, 0), 'workers are out of step with each other');
-});
-
