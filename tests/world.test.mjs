@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildWorld, tileOffsets } from '../src/world.mjs';
+import { buildWorld, tileOffsets, TILE } from '../src/world.mjs';
 
 const NOW = Date.parse('2026-10-02T12:00:00Z');
 const iso = hoursAgo => new Date(NOW - hoursAgo * 3600e3).toISOString();
@@ -128,7 +128,7 @@ test('closed islands are smaller, take cells after the live ones and overlap not
 
 test('an island is a hexagonal patch of tiles, all distinct and all inside its radius', () => {
   for (const rings of [1, 2, 3, 4]) {
-    const tiles = tileOffsets(rings), radius = Math.sqrt(3) * rings + 1.3;
+    const tiles = tileOffsets(rings), radius = TILE * Math.sqrt(3) * rings + 1.5;
     assert.equal(tiles.length, 1 + 3 * rings * (rings + 1));
     assert.deepEqual([tiles[0].x, tiles[0].z], [0, 0], 'the first tile is the headquarters in the middle');
     assert.equal(new Set(tiles.map(t => `${t.x.toFixed(3)},${t.z.toFixed(3)}`)).size, tiles.length);

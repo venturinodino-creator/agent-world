@@ -13,6 +13,9 @@ import { pose, hash, errand } from './anim.mjs';
 
 const WALK_UNITS = 0.5 / 14;          // pose offsets are in old pixel units; this turns them into tiles
 const RESULT_HEX = { ok: 0x41e08a, fail: 0xff5d6c, running: 0x3fd7e8 };
+// How big things are drawn: buildings, the headquarters and the astronauts, and how far in front of its building an
+// agent's astronaut stands (the building's radius plus a little).
+const BUILD = 1.75, HQ_SCALE = 1.9, ASTRO = 1.75, FRONT = 1.05;
 const FOG = 0x2a1844;   // the planet's haze: distance fades into deep violet
 
 // Island floor colours by health: dark slate normally, royal blue while something is working (as in the reference).
@@ -84,7 +87,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
   const S = { world: null, root: new THREE.Group(), agents: new Map(), pickables: [], rocks: [], hub: null, focus: null, papers: new Map(),
     ring: null, bots: null, hqs: new Map(), hubTop: new THREE.Vector3(0, 6, 0), size: { w: 1, h: 1 } };
   scene.add(S.root);
-  S.ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.035, 8, 40), new THREE.MeshBasicMaterial({ color: 0xffe066 }));
+  S.ring = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.04, 8, 40), new THREE.MeshBasicMaterial({ color: 0xffe066 }));
   S.ring.rotation.x = Math.PI / 2; S.ring.visible = false; scene.add(S.ring);
   const iconProto = workingIcon();
 
@@ -121,7 +124,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     const minZ = Math.min(...cells.map(c => c.z - c.radius)), maxZ = Math.max(...cells.map(c => c.z + c.radius));
     const centre = new THREE.Vector3((minX + maxX) / 2, 0, (minZ + maxZ) / 2);
     const reach = Math.max(...cells.map(c => Math.hypot(c.x - centre.x, c.z - centre.z) + c.radius));
-    const o = overview(reach * 0.78 + 2, centre);   // the tilt foreshortens depth, so it can be framed closer
+    const o = overview(reach * 0.72 + 1, centre);   // the tilt foreshortens depth, so it can be framed closer
     controls.maxDistance = o.position.distanceTo(o.target) * 2.2 + 20;
     if (instant) { controls.target.copy(o.target); camera.position.copy(o.position); } else glide(o.target, o.position, 0.8);
   }
@@ -148,7 +151,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
         if (i === 0) return;
         if (i <= isl.agentCount) { if (rnd() < 0.5) crates.push([x - 0.45, z - 0.32, rnd() < 0.5 ? PALETTE.orange : 0xd9dde4]); return; }
         const r = rnd();
-        if (r < 0.4) for (const [dx, dz] of [[-0.27, -0.2], [0.27, -0.2], [-0.27, 0.2], [0.27, 0.2]]) panels.push([x + dx, z + dz]);
+        if (r < 0.4) for (const [dx, dz] of [[-0.34, -0.26], [0.34, -0.26], [-0.34, 0.26], [0.34, 0.26]]) panels.push([x + dx, z + dz]);
         else if (r < 0.65) { const k = 1 + Math.floor(rnd() * 3); for (let j = 0; j < k; j++) crates.push([x + (rnd() - 0.5) * 0.9, z + (rnd() - 0.5) * 0.9, [PALETTE.orange, 0xd9dde4, PALETTE.blue, PALETTE.grey][Math.floor(rnd() * 4)]]); }
         else if (r < 0.8) tanks.push([x + (rnd() - 0.5) * 0.6, z + (rnd() - 0.5) * 0.6]);
       });
@@ -184,14 +187,14 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     addPlate({ x: 0, z: 0, radius: world.hub.radius }, 'dormant', 0x59d6ff, 0.7);
     S.hub = buildHub(); S.hub.scale.setScalar(hubScale); S.hub.position.y = 0.12; root.add(S.hub); S.hubTop.set(0, 6.1 * hubScale + 0.12, 0);
 
-    const padGeo = new THREE.CylinderGeometry(0.58, 0.62, 0.05, 8), pads = [];
+    const padGeo = new THREE.CylinderGeometry(0.72, 0.76, 0.05, 8), pads = [];
     world.islands.forEach(isl => {
       const h = isl.health;
       addPlate(isl, h, HEALTH[h] ?? HEALTH.ok, isl.dormant ? 0.1 : 0.5);
-      const hq = buildPod(isl.dormant ? 'asleep' : h === 'fail' ? 'fail' : 'ok', isl.dormant ? 1.4 : 1.75);
+      const hq = buildPod(isl.dormant ? 'asleep' : h === 'fail' ? 'fail' : 'ok', isl.dormant ? 1.55 : HQ_SCALE);
       hq.position.set(isl.x, 0.12, isl.z); hq.userData.island = isl.name; root.add(hq); S.pickables.push(hq); addBlob(hq, 0.75, 0.05, 0.6);
       S.hqs.set(isl.name, { mats: hq.userData.mats, last: -9 });
-      tileOffsets(isl.rings).forEach((t, i) => { if (i <= isl.agentCount) pads.push([isl.x + t.x, isl.z + t.z, i === 0 ? 1.7 : 1, FLOOR[h]?.[0] ?? FLOOR.ok[0]]); });
+      tileOffsets(isl.rings).forEach((t, i) => { if (i <= isl.agentCount) pads.push([isl.x + t.x, isl.z + t.z, i === 0 ? 1.65 : 1, FLOOR[h]?.[0] ?? FLOOR.ok[0]]); });
     });
     if (pads.length) {
       const im = new THREE.InstancedMesh(padGeo, new THREE.MeshStandardMaterial({ roughness: 0.7 }), pads.length), m = new THREE.Matrix4(), c = new THREE.Color();
@@ -204,10 +207,10 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       const isl = world.islands.find(i => i.name === a.island), ph = hash(a.id);
       const building = buildingFor(a, a.status, ph); building.position.set(a.pos.x, 0.14, a.pos.z);
       building.rotation.y = Math.floor(ph * 8) * (Math.PI / 4);
-      building.scale.setScalar(1.2);   // chunky, like the reference
+      building.scale.setScalar(BUILD);   // chunky, like the reference
       building.userData.agentId = a.id; addBlob(building, 0.72, 0.05, 0.55);
-      const robot = buildRobot(a.kind, a.name); robot.position.set(a.pos.x, 0.14, a.pos.z + 0.7);
-      robot.scale.setScalar(1.5); robot.userData.agentId = a.id; addBlob(robot, 0.2, 0.05, 0.55);
+      const robot = buildRobot(a.kind, a.name); robot.position.set(a.pos.x, 0.14, a.pos.z + FRONT);
+      robot.scale.setScalar(ASTRO); robot.userData.agentId = a.id; addBlob(robot, 0.2, 0.05, 0.55);
       const carry = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({ color: PALETTE.orange, roughness: 0.45 }));
       carry.position.set(0, 1.0, 0); carry.visible = false; robot.add(carry);
       const sparks = a.status === 'running' ? Array.from({ length: 6 }, () => { const sp = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), new THREE.MeshBasicMaterial({ color: 0xfff1a8 })); root.add(sp); return sp; }) : [];
@@ -218,8 +221,8 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       const icon = a.status === 'running' ? iconProto.clone() : null;
       [alarm, icon, ...zs].filter(Boolean).forEach(s => root.add(s));
       root.add(building, robot); S.pickables.push(building, robot);
-      S.agents.set(a.id, { agent: a, building, robot, carry, sparks, halo, bx: a.pos.x, bz: a.pos.z + 0.7, ph, alarm, icon, zs, island: isl,
-        hq: { x: isl.x + (dx / len) * 1.5, z: isl.z + (dz / len) * 1.5 } });
+      S.agents.set(a.id, { agent: a, building, robot, carry, sparks, halo, bx: a.pos.x, bz: a.pos.z + FRONT, ph, alarm, icon, zs, island: isl,
+        hq: { x: isl.x + (dx / len) * 1.9, z: isl.z + (dz / len) * 1.9 } });
     }
 
     // the buildings never move, so their shared-material parts are merged across the whole world (see bakeStatics)
@@ -247,7 +250,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     v.set(x, y, z).project(camera);
     return { x: (v.x * 0.5 + 0.5) * S.size.w, y: (-v.y * 0.5 + 0.5) * S.size.h, visible: v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 };
   }
-  const agentHead = id => { const r = S.agents.get(id); return r ? project(r.robot.position.x, 1.45, r.robot.position.z) : null; };
+  const agentHead = id => { const r = S.agents.get(id); return r ? project(r.robot.position.x, 1.85, r.robot.position.z) : null; };
   // The agents closest to what the camera is looking at, for name tags when zoomed in.
   const nearAgents = (radius, limit) => [...S.agents.values()]
     .map(r => ({ id: r.agent.id, d: Math.hypot(r.robot.position.x - controls.target.x, r.robot.position.z - controls.target.z) }))
@@ -257,7 +260,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
 
   function focusAgent(id) {
     const r = S.agents.get(id); if (!r) return;
-    const target = new THREE.Vector3(r.bx, 0.6, r.bz - 0.3), dir = camera.position.clone().sub(controls.target).normalize();
+    const target = new THREE.Vector3(r.bx, 0.7, r.bz - FRONT * 0.5), dir = camera.position.clone().sub(controls.target).normalize();
     glide(target, target.clone().add(dir.multiplyScalar(12)));
   }
   function focusIsland(name) {
@@ -306,16 +309,16 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       const pulse = a.status === 'running' ? 0.6 + 0.5 * Math.sin(t * 6 + r.ph * 6) : a.status === 'fail' ? (p.alarm ? 1.4 : 0.3) : 0;
       mats.ring.emissiveIntensity = 1.0 + pulse + boost;
       if (a.status === 'fail') mats.body.emissive.setHex(p.alarm ? 0x66101c : 0x000000);
-      if (r.alarm) r.alarm.position.set(rx, 1.5 + Math.sin(t * 6) * 0.04, rz);
-      if (r.icon) r.icon.position.set(rx, 1.6 + Math.sin(t * 3 + r.ph * 6) * 0.05, rz);
+      if (r.alarm) r.alarm.position.set(rx, 1.85 + Math.sin(t * 6) * 0.04, rz);
+      if (r.icon) r.icon.position.set(rx, 2.0 + Math.sin(t * 3 + r.ph * 6) * 0.05, rz);
       // the zzz hovers over the head and follows it when the agent strolls; lower when it is lying down
-      r.zs.forEach(z => { z.position.set(rx + 0.4, (p.asleep ? 1.15 : 1.85) + Math.sin(t * 1.6 + r.ph * 6) * 0.07, rz); z.material.opacity = 0.88 + Math.sin(t * 2.4 + r.ph * 6) * 0.12; });
+      r.zs.forEach(z => { z.position.set(rx + 0.5, (p.asleep ? 1.4 : 2.2) + Math.sin(t * 1.6 + r.ph * 6) * 0.07, rz); z.material.opacity = 0.88 + Math.sin(t * 2.4 + r.ph * 6) * 0.12; });
       if (r.halo) {   // a pulsing ring on the ground shows who is working right now
         const k = (t * 1.2 + r.ph) % 1; r.halo.position.set(rx, 0.2, rz); r.halo.scale.setScalar(0.8 + k * 0.9); r.halo.material.opacity = 0.9 * (1 - k);
       }
       r.sparks.forEach((sp, i) => {   // a working agent throws sparks off its building
         const u = (t * 1.6 + i / 6 + r.ph) % 1, ang = i * 1.1 + r.ph * 6;
-        sp.position.set(r.bx + Math.cos(ang) * 0.4 * u, 0.75 + u * 0.7, r.bz - 0.7 + Math.sin(ang) * 0.4 * u); sp.scale.setScalar(Math.max(0.01, 1 - u));
+        sp.position.set(r.bx + Math.cos(ang) * 0.5 * u, 0.9 + u * 0.85, r.bz - FRONT + Math.sin(ang) * 0.5 * u); sp.scale.setScalar(Math.max(0.01, 1 - u));
       });
     }
 
@@ -327,7 +330,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
 
     const sel = ui.selectedId && S.agents.get(ui.selectedId);
     S.ring.visible = !!sel;
-    if (sel) { S.ring.position.set(sel.bx, 0.2, sel.bz - 0.3); S.ring.scale.setScalar(1 + Math.sin(t * 5) * 0.06); }
+    if (sel) { S.ring.position.set(sel.bx, 0.2, sel.bz - FRONT * 0.5); S.ring.scale.setScalar(1 + Math.sin(t * 5) * 0.06); }
 
     const live = new Set(ui.papers || []);
     for (const [pg, mm] of S.papers) if (!live.has(pg)) { mm.removeFromParent(); mm.material.dispose(); S.papers.delete(pg); }
