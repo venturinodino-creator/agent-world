@@ -22,7 +22,7 @@ so it shows exactly the repos that dashboard shows and never changes it.
 
 ## What moves
 
-Behaviour comes from real status: running agents bounce, hammer away and throw sparks under a big working bubble, failing ones
+Behaviour comes from real status: running agents keep picking things up at their building and carrying them to the base in the middle of their hexagon (sparks and a big working bubble over them), failing ones
 flash red and pace, agents on a timer (a scheduled workflow) jog around their building between runs, and the rest (no timer, nothing
 running) lie down asleep with a big zzz. Plumbing workflows (Pages deploys, smoke
 checks, CI) are left out, see `skipWorkflows` in `src/config.mjs`. A crowded island keeps only low things on its free tiles. Islands are packed like a honeycomb around the hub rocket. Every

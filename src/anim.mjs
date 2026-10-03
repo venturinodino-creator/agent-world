@@ -40,6 +40,21 @@ export function errand(elapsed) {
   return { u: 1 - (k - 0.6) / 0.4, carrying: false, depositing: false };
 }
 
+// What a working agent's astronaut does all the time it is running: picks something up at its building, carries it to the
+// base in the middle of the hexagon, drops it off and walks back for the next one. `dist` is how far the walk is; u runs
+// 0 (at the building) to 1 (at the base). The walk takes longer the further away the base is, within limits.
+const PICK = 1.2, DEPOSIT = 0.8, WALK_SPEED = 4.5;
+export const workLeg = dist => Math.min(4, Math.max(1.2, dist / WALK_SPEED));
+export const workPeriod = dist => PICK + 2 * workLeg(dist) + DEPOSIT;
+export function workCycle(t, dist) {
+  const leg = workLeg(dist), period = workPeriod(dist), e = ((t % period) + period) % period;
+  if (e < PICK) return { u: 0, picking: true, carrying: e > PICK * 0.65, depositing: false };
+  const w = e - PICK;
+  if (w < leg) return { u: w / leg, picking: false, carrying: true, depositing: false };
+  if (w < leg + DEPOSIT) return { u: 1, picking: false, carrying: false, depositing: true };
+  return { u: 1 - (w - leg - DEPOSIT) / leg, picking: false, carrying: false, depositing: false };
+}
+
 // The replay sweeps the last 24 hours of real time in loopMs of wall time, then starts again.
 export function replayClock(elapsedMs, now, loopMs) {
   return now - DAY + ((elapsedMs % loopMs) / loopMs) * DAY;

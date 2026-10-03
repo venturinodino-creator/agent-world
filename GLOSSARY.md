@@ -9,7 +9,7 @@ Anything that does work for a repo and has a building and a little character in 
 _Avoid_: Bot, job, thread (the side panel says "threads", but they are agents)
 
 **Working**:
-An agent that is running a task right now.
+An agent that is running a task right now. Its astronaut is seen at work: picking something up at its building, carrying it to the base in the middle of its hexagon, dropping it off and walking back, over and over.
 _Avoid_: Active, busy, live
 
 **On a timer**:

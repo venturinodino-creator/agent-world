@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pose, replayClock, due, errand, ERRAND_SECONDS } from '../src/anim.mjs';
+import { pose, replayClock, due, errand, ERRAND_SECONDS, workCycle, workPeriod } from '../src/anim.mjs';
 
 const agent = (status, id = 'repo::agent', timer = false) => ({ id, status, kind: 'workflow', timer });
 const times = Array.from({ length: 400 }, (_, i) => i * 0.25);
@@ -55,6 +55,25 @@ test('a timer does not stop an agent working or failing: those states win', () =
 test('the same agent and time always give the same pose', () => {
   assert.deepEqual(pose(agent('ok'), 12.5), pose(agent('ok'), 12.5));
   assert.deepEqual(pose(agent('fail'), 3.1), pose(agent('fail'), 3.1));
+});
+
+test('a working agent picks something up at its building, carries it to the base, drops it off and walks back, over and over', () => {
+  const dist = 9, period = workPeriod(dist), seen = new Set();
+  const cycle = Array.from({ length: Math.round(period * 40) }, (_, i) => workCycle(i * 0.025, dist));
+  assert.ok(cycle[0].picking && cycle[0].u === 0 && !cycle[0].carrying, 'it starts by picking up at the building');
+  assert.ok(cycle.some(c => c.picking && c.carrying), 'the item is in its hands before it sets off');
+  for (const c of cycle) seen.add(`${c.picking}/${c.carrying}/${c.depositing}`);
+  assert.ok(seen.has('false/true/false') && seen.has('false/false/true') && seen.has('false/false/false'), [...seen].join(' '));
+  assert.ok(cycle.every(c => c.u >= 0 && c.u <= 1), 'it never leaves the stretch between building and base');
+  assert.ok(cycle.filter(c => c.depositing).every(c => c.u === 1), 'it drops off at the base');
+  assert.ok(Math.max(...cycle.filter(c => c.carrying && !c.picking).map(c => c.u)) > 0.95, 'it carries all the way to the base');
+  assert.ok(Math.min(...cycle.filter(c => !c.carrying && !c.depositing && !c.picking).map(c => c.u)) < 0.05, 'it comes all the way back with empty hands');
+  assert.deepEqual(workCycle(3.3, dist), workCycle(3.3 + period, dist), 'and it repeats every period');
+});
+
+test('a longer walk to the base takes longer, within sensible limits', () => {
+  assert.ok(workPeriod(2) < workPeriod(10) && workPeriod(10) < workPeriod(40));
+  assert.ok(workPeriod(1000) < 12 && workPeriod(0) > 3);
 });
 
 test('the replay clock sweeps the last 24 hours and then loops', () => {

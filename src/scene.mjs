@@ -9,7 +9,7 @@ import { scatterDecor } from './decor.mjs';
 import { createPost } from './post.mjs';
 import { addBlob } from './grounding.mjs';
 import { tileOffsets, TILE } from './world.mjs';
-import { pose, hash, errand } from './anim.mjs';
+import { pose, hash, errand, workCycle } from './anim.mjs';
 
 const WALK_UNITS = 0.5 / 14;          // pose offsets are in old pixel units; this turns them into tiles
 const RESULT_HEX = { ok: 0x41e08a, fail: 0xff5d6c, running: 0x3fd7e8 };
@@ -201,7 +201,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       const robot = buildRobot(a.kind, a.name); robot.position.set(a.pos.x, 0.14, a.pos.z + FRONT);
       robot.scale.setScalar(ASTRO); robot.rotation.order = 'YXZ'; robot.userData.agentId = a.id; addBlob(robot, 0.2, 0.05, 0.55);
       const carry = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({ color: PALETTE.orange, roughness: 0.45 }));
-      carry.position.set(0, 1.0, 0); carry.visible = false; robot.add(carry);
+      carry.position.set(0, 0.45, 0.24); carry.visible = false; robot.add(carry);
       const sparks = a.status === 'running' ? Array.from({ length: 6 }, () => { const sp = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), new THREE.MeshBasicMaterial({ color: 0xfff1a8 })); root.add(sp); return sp; }) : [];
       const halo = a.status === 'running' ? new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.09, 8, 40), new THREE.MeshBasicMaterial({ color: 0x7fe9ff, transparent: true })) : null;
       if (halo) { halo.rotation.x = Math.PI / 2; root.add(halo); }
@@ -278,7 +278,9 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
 
     for (const r of S.agents.values()) {
       const a = r.agent, p = pose(a, t), mats = r.building.userData.mats, boost = a.id === ui.selectedId ? 1.2 : a.id === ui.hoverId ? 0.8 : 0;
-      const er = errandFor(ui.errands, a.id, t);
+      // a replayed event sends the astronaut on an errand; otherwise a working agent keeps picking things up and taking them to the base
+      const hqDist = Math.hypot(r.hq.x - r.bx, r.hq.z - r.bz);
+      const er = errandFor(ui.errands, a.id, t) || (a.status === 'running' ? { ...workCycle(t + r.ph * 20, hqDist), result: 'running' } : null);
       let rx = r.bx + p.dx * WALK_UNITS, rz = r.bz, yaw = p.walking ? (p.facing > 0 ? Math.PI / 2 : -Math.PI / 2) : 0, y = 0.14 + (p.typing ? Math.abs(Math.sin(t * 10 + r.ph * 6)) * 0.3 : p.asleep ? -0.1 : Math.sin(t * 2 + r.ph * 6) * 0.012);
       let walking = p.walking;
       if (p.jogging && !er) {   // on a timer: jogs a small circle around its spot
@@ -289,9 +291,9 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       if (er) {                      // an errand: carry a crate to the headquarters, drop it off, come back
         rx = r.bx + (r.hq.x - r.bx) * er.u; rz = r.bz + (r.hq.z - r.bz) * er.u;
         const back = !er.carrying && !er.depositing, k = back ? -1 : 1;
-        yaw = Math.atan2((r.hq.x - r.bx) * k, (r.hq.z - r.bz) * k);
-        y = 0.14 + (er.depositing ? Math.abs(Math.sin(t * 12)) * 0.12 : Math.abs(Math.sin(t * 9 + r.ph * 5)) * 0.05);
-        walking = !er.depositing; r.carry.material.color.setHex(RESULT_HEX[er.result] ?? PALETTE.orange);
+        yaw = er.picking ? Math.PI : Math.atan2((r.hq.x - r.bx) * k, (r.hq.z - r.bz) * k);   // picking up: facing its building
+        y = 0.14 + (er.depositing ? Math.abs(Math.sin(t * 12)) * 0.12 : er.picking ? 0 : Math.abs(Math.sin(t * 9 + r.ph * 5)) * 0.25);
+        walking = !er.depositing && !er.picking; r.carry.material.color.setHex(RESULT_HEX[er.result] ?? PALETTE.orange);
         if (er.depositing) { const hq = S.hqs.get(a.island); if (hq) hq.last = t; }
       }
       r.carry.visible = !!er?.carrying;
@@ -301,9 +303,9 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       r.robot.scale.setScalar(sc);
       r.robot.position.set(rx + (lying ? Math.sin(tilt) * 0.36 * sc : 0), lying ? 0.14 + 0.14 * sc + Math.sin(t * 1.4 + r.ph * 6) * 0.02 : y, rz);
       r.robot.rotation.y = yaw;
-      r.robot.rotation.x = p.typing && !er ? 0.18 + Math.sin(t * 10 + r.ph * 6) * 0.06 : p.jogging && !er ? 0.3 : 0;
+      r.robot.rotation.x = er?.picking ? 0.5 + Math.sin(t * 9 + r.ph * 6) * 0.08 : p.typing && !er ? 0.18 + Math.sin(t * 10 + r.ph * 6) * 0.06 : p.jogging && !er ? 0.3 : walking && er ? 0.12 : 0;
       r.robot.rotation.z = lying ? tilt + Math.sin(t * 1.4 + r.ph * 6) * 0.02 : er && walking ? Math.sin(t * 9 + r.ph * 5) * 0.1 : 0;
-      r.robot.userData.arms.forEach((arm, i) => { arm.rotation.x = lying ? 0.25 : p.typing && !er ? -0.9 + Math.sin(t * 14 + i * Math.PI) * 0.7 : p.jogging && !er ? Math.sin(t * 13 + i * Math.PI) * 1.1 : walking ? Math.sin(t * 9 + i * Math.PI) * 0.6 : 0; });
+      r.robot.userData.arms.forEach((arm, i) => { arm.rotation.x = lying ? 0.25 : er?.picking ? -1.2 + Math.sin(t * 9 + i * Math.PI) * 0.4 : er?.carrying ? -1.0 : p.typing && !er ? -0.9 + Math.sin(t * 14 + i * Math.PI) * 0.7 : p.jogging && !er ? Math.sin(t * 13 + i * Math.PI) * 1.1 : walking ? Math.sin(t * 9 + i * Math.PI) * 0.6 : 0; });
       r.robot.userData.body.emissive.setHex(p.alarm ? 0xff2244 : 0x000000);
       r.robot.userData.body.emissiveIntensity = p.alarm ? 0.7 : 0;
       const pulse = a.status === 'running' ? 0.6 + 0.5 * Math.sin(t * 6 + r.ph * 6) : a.status === 'fail' ? (p.alarm ? 1.4 : 0.3) : 0;
