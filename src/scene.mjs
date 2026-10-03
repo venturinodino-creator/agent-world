@@ -1,11 +1,12 @@
 // The 3D scene: renderer, camera, lights, sunny desert and sky, floating rocks, hexagon islands with their
 // buildings and robots, the hub, picking and the camera glide. What exists comes from the world model and
 // how it moves comes from anim.mjs; this file decides how it looks. Browser only (needs WebGL).
-import { THREE, STATUS, HEALTH, PALETTE, buildPod, buildRobot, buildingFor, buildHub, symbolSprite, workingIcon, sleepSprite, bakeStatics } from './models.mjs';
+import { THREE, STATUS, HEALTH, PALETTE, buildRobot, buildingFor, buildHub, symbolSprite, workingIcon, sleepSprite, bakeStatics } from './models.mjs';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { skyDome, planets, alienGround, alienProps } from './space.mjs';
 import { scatterDecor } from './decor.mjs';
+import { baseFor } from './bases.mjs';
 import { createPost } from './post.mjs';
 import { addBlob } from './grounding.mjs';
 import { tileOffsets, TILE } from './world.mjs';
@@ -29,19 +30,33 @@ const lcg = seed => () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967
 
 // A square-tile floor with thin light seams and a little speckle, drawn once per colour.
 const floorCache = new Map();
-function floorTexture(health) {
-  const [base, line] = FLOOR[health] || FLOOR.ok;
-  if (!floorCache.has(health)) {
+// What is drawn on the floor of each island design (all of them repeat cleanly): square tiles, a diamond lattice, circuit
+// traces, a diagonal grating, big riveted plates, concentric rings, studs.
+function floorPattern(x, style, line) {
+  const rnd = lcg(77 + style * 13);
+  x.strokeStyle = line; x.fillStyle = line; x.lineWidth = 4;
+  if (style === 1) { x.lineWidth = 3; for (let k = -8; k <= 16; k++) { x.beginPath(); x.moveTo(k * 32, 0); x.lineTo(k * 32 + 256, 256); x.moveTo(k * 32 + 256, 0); x.lineTo(k * 32, 256); x.stroke(); } }
+  else if (style === 2) { x.lineWidth = 3; for (let i = 0; i < 9; i++) { let px = 24 + rnd() * 208, py = 24 + rnd() * 208; x.beginPath(); x.moveTo(px, py); for (let s = 0; s < 3; s++) { if (s % 2) py = Math.max(16, Math.min(240, py + (rnd() - 0.5) * 120)); else px = Math.max(16, Math.min(240, px + (rnd() - 0.5) * 120)); x.lineTo(px, py); } x.stroke(); x.beginPath(); x.arc(px, py, 6, 0, Math.PI * 2); x.fill(); } }
+  else if (style === 3) { x.lineWidth = 6; for (let k = 0; k <= 32; k++) { x.beginPath(); x.moveTo(k * 16 - 256, 0); x.lineTo(k * 16, 256); x.stroke(); } }
+  else if (style === 4) { x.lineWidth = 6; x.strokeRect(3, 3, 250, 250); x.beginPath(); x.moveTo(128, 0); x.lineTo(128, 256); x.moveTo(0, 128); x.lineTo(256, 128); x.stroke(); for (const px of [24, 104, 152, 232]) for (const py of [24, 104, 152, 232]) { x.beginPath(); x.arc(px, py, 4, 0, Math.PI * 2); x.fill(); } }
+  else if (style === 5) { x.lineWidth = 5; for (const r of [28, 60, 92, 124]) { x.beginPath(); x.arc(128, 128, r, 0, Math.PI * 2); x.stroke(); } }
+  else if (style === 6) { for (let px = 16; px < 256; px += 32) for (let py = 16; py < 256; py += 32) { x.beginPath(); x.arc(px, py, 5, 0, Math.PI * 2); x.fill(); } }
+  else x.strokeRect(2, 2, 252, 252);
+}
+
+function floorTexture(health, style = 0) {
+  const [base, line] = FLOOR[health] || FLOOR.ok, key = `${health}/${style}`;
+  if (!floorCache.has(key)) {
     const c = document.createElement('canvas'); c.width = c.height = 256;
     const x = c.getContext('2d'), rnd = lcg(health.length * 31 + 5);
     x.fillStyle = base; x.fillRect(0, 0, 256, 256);
     for (let i = 0; i < 700; i++) { x.fillStyle = `rgba(255,255,255,${0.02 + rnd() * 0.04})`; x.fillRect(rnd() * 256, rnd() * 256, 2 + rnd() * 6, 2 + rnd() * 3); }
     for (let i = 0; i < 500; i++) { x.fillStyle = `rgba(0,0,0,${0.03 + rnd() * 0.05})`; x.fillRect(rnd() * 256, rnd() * 256, 2 + rnd() * 5, 2 + rnd() * 3); }
-    x.strokeStyle = line; x.lineWidth = 4; x.strokeRect(2, 2, 252, 252);
+    floorPattern(x, style, line);
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
-    floorCache.set(health, t);
+    floorCache.set(key, t);
   }
-  return floorCache.get(health);
+  return floorCache.get(key);
 }
 
 // The bright hexagon border of an island (vertices on the x axis, like the plate).
@@ -160,8 +175,8 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     const R = world.bounds.radius, root = S.root;
     root.add(alienGround(R), alienProps(R));
     // each island: a coral-sided slate platform with a square-tile floor and a bright health-coloured rim
-    const addPlate = (isl, floor, rimHex, rimK) => {
-      const tex = floorTexture(floor).clone(); tex.needsUpdate = true;
+    const addPlate = (isl, floor, rimHex, rimK, style = 0) => {
+      const tex = floorTexture(floor, style).clone(); tex.needsUpdate = true;
       tex.repeat.set((isl.radius * 2) / 2.6, (isl.radius * 2) / 2.6); tex.center.set(0.5, 0.5); tex.rotation = Math.PI / 4;
       const plate = new THREE.Mesh(new THREE.CylinderGeometry(isl.radius - 0.02, isl.radius - 0.02, 0.5, 6), [
         new THREE.MeshStandardMaterial({ color: SIDE[floor] ?? SIDE.ok, roughness: 0.55 }), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.75 }), new THREE.MeshStandardMaterial({ color: 0x20212a })]);
@@ -178,8 +193,8 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     const padGeo = new THREE.CylinderGeometry(1.5, 1.56, 0.05, 8), pads = [];
     world.islands.forEach(isl => {
       const h = isl.health;
-      addPlate(isl, h, HEALTH[h] ?? HEALTH.ok, isl.dormant ? 0.1 : 0.5);
-      const hq = buildPod(isl.dormant ? 'asleep' : h === 'fail' ? 'fail' : 'ok', isl.dormant ? 3.2 : HQ_SCALE);
+      addPlate(isl, h, HEALTH[h] ?? HEALTH.ok, isl.dormant ? 0.1 : 0.5, isl.design);
+      const hq = baseFor(isl.design ?? 0, isl.dormant ? 'asleep' : h === 'fail' ? 'fail' : 'ok', isl.dormant ? 3.2 : HQ_SCALE);
       hq.position.set(isl.x, 0.12, isl.z); hq.userData.island = isl.name; root.add(hq); S.pickables.push(hq); addBlob(hq, 0.75, 0.05, 0.6);
       S.hqs.set(isl.name, { mats: hq.userData.mats, last: -9 });
       tileOffsets(isl.rings).forEach((t, i) => { if (i <= isl.agentCount) pads.push([isl.x + t.x, isl.z + t.z, i === 0 ? 1.9 : 1, FLOOR[h]?.[0] ?? FLOOR.ok[0]]); });

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildWorld, tileOffsets, TILE, PUSH } from '../src/world.mjs';
+import { buildWorld, tileOffsets, TILE, PUSH, DESIGNS } from '../src/world.mjs';
 
 const NOW = Date.parse('2026-10-02T12:00:00Z');
 const iso = hoursAgo => new Date(NOW - hoursAgo * 3600e3).toISOString();
@@ -47,6 +47,16 @@ test('an island is sized for the agents that are left once plumbing is skipped',
   const flows = [...Array.from({ length: 18 }, (_, i) => wf('Scan ' + String(i).padStart(2, '0'))), wf('Smoke check'), wf('pages build and deployment')];
   assert.equal(world([repo('a', { workflows: flows })]).islands[0].rings, 3);
   assert.equal(world([repo('a', { workflows: flows })], { localAgents: [], skipWorkflows: ['Smoke check', 'pages build and deployment'] }).islands[0].rings, 2);
+});
+
+test('every island has its own design, so neighbouring plates never look alike, and the same input gives the same designs', () => {
+  const names = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+  const w = world(names.map(n => repo(n)), { localAgents: [{ name: 'Watcher', repo: null, schedule: 'Daily', status: 'scheduled' }] });
+  assert.equal(w.islands.length, 8);
+  const first = w.islands.slice(0, DESIGNS).map(i => i.design);
+  assert.equal(new Set(first).size, DESIGNS, 'the first ' + DESIGNS + ' islands all differ: ' + first);
+  assert.ok(w.islands.every(i => Number.isInteger(i.design) && i.design >= 0 && i.design < DESIGNS));
+  assert.deepEqual(world(names.map(n => repo(n)), { localAgents: [{ name: 'Watcher', repo: null, schedule: 'Daily', status: 'scheduled' }] }).islands.map(i => i.design), w.islands.map(i => i.design));
 });
 
 test('workflow status comes from its latest run', () => {

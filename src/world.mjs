@@ -13,6 +13,8 @@ const SQRT3 = Math.sqrt(3);
 export const TILE = 1.8;
 // Every tile except the base in the middle is pushed this far outward, so the base has room to be the biggest building.
 export const PUSH = 2.0;
+// How many island designs there are: each island takes the next one, so neighbouring plates never look alike.
+export const DESIGNS = 7;
 const GAP = 0.4;                      // the strip of ground between neighbouring islands
 const CLOSED_RADIUS = 2.4;            // closed (dormant) islands are small
 const HEX_DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
@@ -116,7 +118,7 @@ export function buildWorld(data, config = {}, now = Date.now(), opts = {}) {
   islands.filter(i => !i.dormant).forEach(i => { i.rings = rings; i.radius = round(islandRadius(rings)); });
 
   const { hub, placed } = layout(islands);
-  islands.forEach((isl, i) => { isl.x = placed[i].x; isl.z = placed[i].z; });
+  islands.forEach((isl, i) => { isl.x = placed[i].x; isl.z = placed[i].z; isl.design = i % DESIGNS; });
 
   const tiles = new Map(islands.map(i => [i.name, spiral(i.agentCount + 1)])), used = new Map();
   for (const a of agents) {
