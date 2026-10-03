@@ -8,7 +8,7 @@ const css = hex => '#' + hex.toString(16).padStart(6, '0');
 const cache = new Map();
 
 // Draws a colour canvas and a grey height canvas (mid-grey is flat, darker is cut in, lighter is raised).
-function skin(key, draw, size = 256, tall = size) {
+function skin(key, draw, size = 512, tall = size) {
   if (cache.has(key)) return cache.get(key);
   const mk = () => { const c = document.createElement('canvas'); c.width = size; c.height = tall; return c; };
   const cc = mk(), hc = mk(), x = cc.getContext('2d'), h = hc.getContext('2d');
@@ -22,6 +22,7 @@ function skin(key, draw, size = 256, tall = size) {
 }
 
 const speck = (x, s, r, n, rgb, a, w = 2) => {
+  n = Math.round(n * (s / 256) ** 2);   // more specks on a bigger canvas, so the grain keeps its density
   for (let i = 0; i < n; i++) { x.fillStyle = `rgba(${rgb},${a * (0.4 + r() * 0.6)})`; x.fillRect(r() * s, r() * s, 1 + r() * w, 1 + r() * w); }
 };
 // dirty rain streaks running down from the top edge
@@ -238,14 +239,14 @@ export const alienSkin = () => skin('alien', (x, h, s, r) => {
   x.fillStyle = '#e8e2ee'; x.fillRect(0, 0, s, s);
   for (let i = 0; i < 36; i++) { x.fillStyle = `rgba(${r() < 0.5 ? '255,255,255' : '70,50,90'},${0.04 + r() * 0.08})`; x.beginPath(); x.arc(r() * s, r() * s, 12 + r() * 46, 0, 7); x.fill(); }
   for (let i = 0; i < 14; i++) { const y0 = r() * s; x.strokeStyle = `rgba(60,40,80,${0.05 + r() * 0.07})`; x.lineWidth = 2 + r() * 3; x.beginPath(); x.moveTo(0, y0); x.bezierCurveTo(s * 0.3, y0 + (r() - 0.5) * 30, s * 0.7, y0 + (r() - 0.5) * 30, s, y0 + (r() - 0.5) * 20); x.stroke(); }
-  speck(x, s, r, 8000, '50,30,70', 0.2, 1.6); speck(x, s, r, 5000, '255,255,255', 0.35, 1.6);
+  speck(x, s, r, 2000, '50,30,70', 0.2, 1.6); speck(x, s, r, 1250, '255,255,255', 0.35, 1.6);
   for (let i = 0; i < 170; i++) {
     const px = r() * s, py = r() * s, rad = 2 + r() * 7;
     x.fillStyle = 'rgba(40,25,60,0.35)'; x.beginPath(); x.ellipse(px + 1, py + 2, rad, rad * 0.7, 0, 0, 7); x.fill();
     x.fillStyle = `rgba(255,250,255,${0.25 + r() * 0.3})`; x.beginPath(); x.ellipse(px, py, rad, rad * 0.7, 0, 0, 7); x.fill();
     h.fillStyle = '#d0d0d0'; h.beginPath(); h.ellipse(px, py, rad, rad * 0.7, 0, 0, 7); h.fill();
   }
-  speck(h, s, r, 3500, '255,255,255', 0.4, 1.4);
+  speck(h, s, r, 875, '255,255,255', 0.4, 1.4);
 }, 512);
 
 // Glowing cracks for the ground's emissive map: black with branching cyan fissures. Plain texture (not a skin), tiled.
@@ -284,3 +285,23 @@ export const ringMap = () => {
   cache.set('ring', { map: t });
   return t;
 };
+
+// Little road-sign style plates for the decor: an arrow, a caution diamond, an orange arrow, all on a plain background.
+export const signSkin = kind => skin('sign-' + kind, (x, h, s) => {
+  const bg = { arrow: '#2f6fe0', caution: '#f2c230', orange: '#e8742a' }[kind] || '#2f6fe0';
+  x.fillStyle = '#f4f6fa'; x.fillRect(0, 0, s, s);
+  x.fillStyle = bg; x.fillRect(s * 0.06, s * 0.06, s * 0.88, s * 0.88);
+  x.fillStyle = kind === 'caution' ? '#1b1d24' : '#ffffff';
+  if (kind === 'caution') {
+    x.font = `bold ${s * 0.7}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('!', s / 2, s * 0.54);
+  } else {
+    x.beginPath(); x.moveTo(s * 0.2, s * 0.42); x.lineTo(s * 0.5, s * 0.42); x.lineTo(s * 0.5, s * 0.26); x.lineTo(s * 0.8, s * 0.5); x.lineTo(s * 0.5, s * 0.74); x.lineTo(s * 0.5, s * 0.58); x.lineTo(s * 0.2, s * 0.58); x.closePath(); x.fill();
+  }
+}, 128);
+
+// The name plate over a base entrance: pale lettering on dark steel, with a thin border.
+export const plaqueSkin = text => skin('plaque-' + text, (x, h, s, r, t) => {
+  x.fillStyle = '#3a404c'; x.fillRect(0, 0, s, t);
+  x.strokeStyle = '#aab2c0'; x.lineWidth = 6; x.strokeRect(6, 6, s - 12, t - 12);
+  x.fillStyle = '#e8ecf4'; x.font = `bold ${t * 0.5}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(text, s / 2, t / 2 + 4);
+}, 512, 128);

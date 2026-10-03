@@ -10,7 +10,7 @@ const RECENT = 5;            // recent items kept per agent for the detail card
 const SQRT3 = Math.sqrt(3);
 // How far apart the tiles of an island are, as a multiple of the basic hexagon. Buildings are drawn bigger than a basic
 // tile, so the tiles are spread out to give them room.
-export const TILE = 1.2;
+export const TILE = 1.6;
 const GAP = 0.7;                      // the strip of sand between neighbouring islands
 const CLOSED_RADIUS = 2.4;            // closed (dormant) islands are small
 const HEX_DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
