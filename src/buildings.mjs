@@ -191,9 +191,9 @@ function rocketParts(g, { band, ring, pad = true }) {
     put(C(0.06, 0.06, 0.02, 12), gold, c * 0.5, 0.025, s * 0.5);
   }
   if (pad) {
-    put(C(0.52, 0.56, 0.045, 28), darkM(), 0, 0.022, 0);
-    put(new THREE.TorusGeometry(0.43, 0.013, 5, 40), gold, 0, 0.05, 0, [Math.PI / 2, 0, 0]);
-    put(new THREE.TorusGeometry(0.24, 0.008, 5, 30), rim, 0, 0.05, 0, [Math.PI / 2, 0, 0]);
+    put(C(0.48, 0.52, 0.045, 28), darkM(), 0, 0.022, 0);
+    put(new THREE.TorusGeometry(0.4, 0.013, 5, 40), gold, 0, 0.05, 0, [Math.PI / 2, 0, 0]);
+    put(new THREE.TorusGeometry(0.22, 0.008, 5, 30), rim, 0, 0.05, 0, [Math.PI / 2, 0, 0]);
   }
 }
 
@@ -266,7 +266,7 @@ export function buildBase(status, scale = 1) {
   put(B(0.36, 0.28, 0.2), hull(), 0, 0.17, 0.5); put(B(0.24, 0.22, 0.04), blueM(), 0, 0.15, 0.61); put(B(0.16, 0.19, 0.045), ring, 0, 0.14, 0.615);
   put(B(0.3, 0.03, 0.1), steel(), 0, 0.045, 0.7); put(B(0.26, 0.02, 0.07), steel(), 0, 0.025, 0.76);
   put(B(0.34, 0.085, 0.02), shared({ map: plaqueSkin('AGENT BASE').map, roughness: 0.6 }), 0, 0.33, 0.605);
-  for (const sx of [-1, 1]) { put(C(0.12, 0.12, 0.22, 12).rotateZ(Math.PI / 2), hull(), sx * 0.54, 0.16, 0.05); put(C(0.125, 0.125, 0.05, 12).rotateZ(Math.PI / 2), blueM(), sx * 0.5, 0.16, 0.05); put(B(0.04, 0.1, 0.1), steel(), sx * 0.66, 0.16, 0.05); }
+  for (const sx of [-1, 1]) { put(C(0.12, 0.12, 0.2, 12).rotateZ(Math.PI / 2), hull(), sx * 0.5, 0.16, 0.05); put(C(0.125, 0.125, 0.05, 12).rotateZ(Math.PI / 2), blueM(), sx * 0.46, 0.16, 0.05); put(B(0.04, 0.1, 0.1), steel(), sx * 0.61, 0.16, 0.05); }
   flatten(g);
   g.scale.setScalar(scale);
   g.userData.mats = { body: band, ring };

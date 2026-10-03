@@ -11,7 +11,9 @@ const SQRT3 = Math.sqrt(3);
 // How far apart the tiles of an island are, as a multiple of the basic hexagon. Buildings are drawn bigger than a basic
 // tile, so the tiles are spread out to give them room.
 export const TILE = 1.6;
-const GAP = 0.7;                      // the strip of sand between neighbouring islands
+// Every tile except the base in the middle is pushed this far outward, so the base has room to be the biggest building.
+export const PUSH = 0.45;
+const GAP = 0.4;                      // the strip of ground between neighbouring islands
 const CLOSED_RADIUS = 2.4;            // closed (dormant) islands are small
 const HEX_DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 
@@ -62,11 +64,14 @@ function spiral(count) {
   }
   return out.slice(0, count);
 }
-const tileXZ = ([q, r]) => ({ x: TILE * SQRT3 * (q + r / 2), z: TILE * 1.5 * r });
+const tileXZ = ([q, r]) => {
+  const x = TILE * SQRT3 * (q + r / 2), z = TILE * 1.5 * r, d = Math.hypot(x, z), k = d ? 1 + PUSH / d : 1;
+  return { x: x * k, z: z * k };
+};
 // Every tile of an island with this many rings, as offsets from its centre (the renderer draws them all).
 export const tileOffsets = rings => spiral(1 + 3 * rings * (rings + 1)).map(tileXZ);
 const ringsFor = agents => { let rings = 1; while (1 + 3 * rings * (rings + 1) < agents + 1) rings++; return rings; };
-const islandRadius = rings => TILE * SQRT3 * rings + 1.5;
+const islandRadius = rings => TILE * SQRT3 * rings + 1.5 + PUSH;
 
 function healthOf(agents) {
   if (agents.some(a => a.status === 'fail')) return 'fail';
