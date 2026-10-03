@@ -61,6 +61,10 @@ function noise2(x, y) {
 const fbm = (x, y, o = 4) => { let a = 0.5, s = 0, f = 1; for (let i = 0; i < o; i++) { s += a * noise2(x * f, y * f); f *= 2.03; a *= 0.5; } return s / (1 - 0.5 ** o); };
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
+// How much of the landscape's height is actually raised: 0 is a perfectly flat plain (the colours, rock layers and canyons
+// are still painted on it), 1 brings back the full hills and mesas.
+const RELIEF = 0;
+
 // the raw landscape at a point: ridged hills stepped into mesas, with winding canyons cut into them
 function land(x, z) {
   const ridge = 1 - Math.abs(fbm(x * 0.022 + 3, z * 0.022 + 7, 3) * 2 - 1);
@@ -68,7 +72,7 @@ function land(x, z) {
   const step = 3, terraced = Math.floor(y / step) * step + smooth(0.6, 1, (y / step) % 1) * step;
   y = y * 0.45 + terraced * 0.55;
   const canyon = smooth(0.07, 0, Math.abs(fbm(x * 0.017 + 11, z * 0.017 + 5, 3) - 0.5));
-  return { y: y - canyon * 8, canyon };
+  return { y: (y - canyon * 8) * RELIEF, h: y - canyon * 8, canyon };   // y is the height drawn, h the height the colours follow
 }
 // the height the surface is drawn at: flat under the islands, rising into the landscape beyond them
 function surfaceY(x, z, R) {
@@ -91,7 +95,7 @@ export function alienGround(R) {
     const x = pos.getX(i), z = pos.getZ(i), d = Math.hypot(x, z), k = Math.min(1, Math.max(0, (d - (R + 2)) / 16)), l = land(x, z);
     pos.setY(i, -0.4 + k * k * (3 - 2 * k) * l.y);
     palette(Math.min(1, Math.max(0, fbm(x * 0.02 + 1, z * 0.02 + 9, 3) * 1.4 - 0.2)), c);
-    c.multiplyScalar(0.8 + 0.26 * Math.sin(l.y * 2.8 + fbm(x * 0.05, z * 0.05, 2) * 3)).lerp(teal, Math.min(0.9, l.canyon * 0.95 * k));
+    c.multiplyScalar(0.8 + 0.26 * Math.sin(l.h * 2.8 + fbm(x * 0.05, z * 0.05, 2) * 3)).lerp(teal, Math.min(0.9, l.canyon * 0.95 * k));
     colors.set([c.r, c.g, c.b], i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3)); geo.computeVertexNormals();

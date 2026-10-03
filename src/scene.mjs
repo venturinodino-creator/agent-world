@@ -108,7 +108,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     // frame the world inside the part of the view the side panel does not cover
     const vf = camera.fov * Math.PI / 180, visible = Math.max(0.4, (S.size.w - (S.inset || 0)) / S.size.h), hf = 2 * Math.atan(Math.tan(vf / 2) * visible);
     const dist = (R * 1.05) / Math.tan(Math.min(vf, hf) / 2);
-    return { target: centre.clone(), position: centre.clone().add(new THREE.Vector3(0, 0.5, 0.87).normalize().multiplyScalar(dist)) };
+    return { target: centre.clone(), position: centre.clone().add(new THREE.Vector3(0, 0.62, 0.78).normalize().multiplyScalar(dist)) };
   };
   const glide = (target, position, seconds = 0.9) => {
     S.focus = { t0: performance.now(), dur: seconds * 1000, fromT: controls.target.clone(), fromP: camera.position.clone(), toT: target, toP: position };
