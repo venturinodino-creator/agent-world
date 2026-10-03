@@ -15,7 +15,7 @@ const WALK_UNITS = 0.5 / 14;          // pose offsets are in old pixel units; th
 const RESULT_HEX = { ok: 0x41e08a, fail: 0xff5d6c, running: 0x3fd7e8 };
 // How big things are drawn: buildings, the headquarters and the astronauts, and how far in front of its building an
 // agent's astronaut stands (the building's radius plus a little).
-const BUILD = 3.9, HQ_SCALE = 6.0, ASTRO = 4.9, FRONT = 2.6;
+const BUILD = 3.9, HQ_SCALE = 6.0, ASTRO = 5.5, FRONT = 2.6;
 const FOG = 0x2a1844;   // the planet's haze: distance fades into deep violet
 
 // Island floor colours by health: dark slate normally, royal blue while something is working (as in the reference).

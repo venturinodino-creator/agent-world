@@ -7,7 +7,7 @@ export { buildPod, buildHub, buildingFor } from './buildings.mjs';
 
 // An astronaut for every agent: a chunky suit in a saturated colour that tells the kind of agent apart and stands out
 // from the white and grey buildings (orange for workflows, pink for Claude, red for the bot, violet for Cowork, blue for
-// you), with white stripes and a mission patch, a big white helmet with a dark glass visor, ear pods, a chest control
+// you), with white stripes and a mission patch, a big helmet in the suit colour with a dark glass visor, ear pods, a chest control
 // box with a hose to the backpack, dark puffy gloves and boots. No face: the visor is just glass.
 // The patch is a plain coloured disc, not any real agency's badge.
 const SUITS = { workflow: 0xff7a1a, builder: 0xff3d8a, bot: 0xe5353b, human: 0x2f86ff, local: 0x9a62ff };
@@ -36,7 +36,7 @@ export function buildRobot(kind, name) {
   at(new THREE.TorusGeometry(0.05, 0.009, 5, 10, Math.PI), STEEL, 0.1, 0.31, 0, [0, Math.PI / 2, 0]);        // hose from chest to backpack
   for (const side of [-1, 1]) at(new THREE.CylinderGeometry(0.045, 0.045, 0.06, 10).rotateZ(Math.PI / 2), GREY, side * 0.165, 0.6, 0);   // ear pods
   // the helmet and its glass visor (a cap of a slightly larger sphere, facing front)
-  g.add(mesh(new THREE.SphereGeometry(0.158, 18, 14), toy(0xffffff, { roughness: 0.22, metalness: 0.08, clearcoat: 0.9, clearcoatRoughness: 0.12 }), 0, 0.6, 0));
+  g.add(mesh(new THREE.SphereGeometry(0.158, 18, 14), toy(SUIT, { roughness: 0.28, metalness: 0.05, clearcoat: 0.9, clearcoatRoughness: 0.12 }), 0, 0.6, 0));
   const glass = visorSkin();
   g.add(mesh(new THREE.SphereGeometry(0.162, 14, 8, Math.PI / 2 - 0.95, 1.9, Math.PI / 2 - 0.78, 1.3),
     skinned(glass, { color: 0xffffff, emissiveMap: glass.map, emissive: 0xffffff, emissiveIntensity: 0.35, roughness: 0.08, metalness: 0.5, clearcoat: 1, clearcoatRoughness: 0.04 }), 0, 0.6, 0));
