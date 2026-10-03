@@ -15,7 +15,7 @@ const WALK_UNITS = 0.5 / 14;          // pose offsets are in old pixel units; th
 const RESULT_HEX = { ok: 0x41e08a, fail: 0xff5d6c, running: 0x3fd7e8 };
 // How big things are drawn: buildings, the headquarters and the astronauts, and how far in front of its building an
 // agent's astronaut stands (the building's radius plus a little).
-const BUILD = 3.4, HQ_SCALE = 4.3, ASTRO = 4.7, FRONT = 2.35;
+const BUILD = 3.9, HQ_SCALE = 4.6, ASTRO = 4.9, FRONT = 2.6;
 const FOG = 0x2a1844;   // the planet's haze: distance fades into deep violet
 
 // Island floor colours by health: dark slate normally, royal blue while something is working (as in the reference).
@@ -171,18 +171,18 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     };
 
     // the hub tower stands on its own cell in the middle of the honeycomb
-    const hubScale = THREE.MathUtils.clamp(world.hub.radius / 4.6, 1, 1.9);
+    const hubScale = THREE.MathUtils.clamp(world.hub.radius / 4.6, 1, 2.8);
     addPlate({ x: 0, z: 0, radius: world.hub.radius }, 'dormant', 0x59d6ff, 0.7);
     S.hub = buildHub(); S.hub.scale.setScalar(hubScale); S.hub.position.y = 0.12; root.add(S.hub); S.hubTop.set(0, 6.1 * hubScale + 0.12, 0);
 
-    const padGeo = new THREE.CylinderGeometry(1.35, 1.41, 0.05, 8), pads = [];
+    const padGeo = new THREE.CylinderGeometry(1.5, 1.56, 0.05, 8), pads = [];
     world.islands.forEach(isl => {
       const h = isl.health;
       addPlate(isl, h, HEALTH[h] ?? HEALTH.ok, isl.dormant ? 0.1 : 0.5);
       const hq = buildPod(isl.dormant ? 'asleep' : h === 'fail' ? 'fail' : 'ok', isl.dormant ? 2.4 : HQ_SCALE);
       hq.position.set(isl.x, 0.12, isl.z); hq.userData.island = isl.name; root.add(hq); S.pickables.push(hq); addBlob(hq, 0.75, 0.05, 0.6);
       S.hqs.set(isl.name, { mats: hq.userData.mats, last: -9 });
-      tileOffsets(isl.rings).forEach((t, i) => { if (i <= isl.agentCount) pads.push([isl.x + t.x, isl.z + t.z, i === 0 ? 1.55 : 1, FLOOR[h]?.[0] ?? FLOOR.ok[0]]); });
+      tileOffsets(isl.rings).forEach((t, i) => { if (i <= isl.agentCount) pads.push([isl.x + t.x, isl.z + t.z, i === 0 ? 1.45 : 1, FLOOR[h]?.[0] ?? FLOOR.ok[0]]); });
     });
     if (pads.length) {
       const im = new THREE.InstancedMesh(padGeo, new THREE.MeshStandardMaterial({ roughness: 0.7 }), pads.length), m = new THREE.Matrix4(), c = new THREE.Color();
@@ -211,7 +211,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       [alarm, icon, ...zs].filter(Boolean).forEach(s => root.add(s));
       root.add(building, robot); S.pickables.push(building, robot);
       S.agents.set(a.id, { agent: a, building, robot, carry, sparks, halo, bx: a.pos.x, bz: a.pos.z + FRONT, ph, alarm, icon, zs, island: isl,
-        hq: { x: isl.x + (dx / len) * 4.2, z: isl.z + (dz / len) * 4.2 } });
+        hq: { x: isl.x + (dx / len) * 4.5, z: isl.z + (dz / len) * 4.5 } });
     }
 
     // the buildings never move, so their shared-material parts are merged across the whole world (see bakeStatics)
