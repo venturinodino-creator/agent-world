@@ -155,20 +155,6 @@ export const fabricSkin = () => skin('fabric', (x, h, s, r) => {
   }
 });
 
-// Fine sand: warm speckle with wind ripples, tiled across the whole desert (near white, so the dune colours show through).
-export const sandSkin = () => skin('sand', (x, h, s, r) => {
-  x.fillStyle = '#f3ead9'; x.fillRect(0, 0, s, s);
-  speck(x, s, r, 9000, '120,90,50', 0.16, 1.4); speck(x, s, r, 7000, '255,250,235', 0.3, 1.4);
-  for (let i = 0; i < 26; i++) {
-    const y0 = r() * s, amp = 3 + r() * 5, f = 0.012 + r() * 0.02, ph = r() * 6;
-    x.strokeStyle = `rgba(90,60,30,${0.05 + r() * 0.06})`; x.lineWidth = 1.5; x.beginPath();
-    h.strokeStyle = '#9a9a9a'; h.lineWidth = 3; h.beginPath();
-    for (let px = 0; px <= s; px += 8) { const py = y0 + Math.sin(px * f * 6.28 + ph) * amp; if (px) { x.lineTo(px, py); h.lineTo(px, py); } else { x.moveTo(px, py); h.moveTo(px, py); } }
-    x.stroke(); h.stroke();
-  }
-  speck(h, s, r, 3000, '255,255,255', 0.4, 1.2);
-}, 512);
-
 // An astronaut's visor: near-black glass with a faint blue sheen, a few stars reflected in it, a bright glint high on one
 // side and a darker edge. It is painted on a cap of the helmet sphere, so the middle of the picture faces forward.
 export const visorSkin = () => skin('visor', (x, h, s, r, t) => {
@@ -185,3 +171,73 @@ export const visorSkin = () => skin('visor', (x, h, s, r, t) => {
   const rim = x.createRadialGradient(s / 2, t / 2, t * 0.3, s / 2, t / 2, s * 0.62); rim.addColorStop(0, 'rgba(0,0,0,0)'); rim.addColorStop(1, 'rgba(0,0,0,0.6)');
   x.fillStyle = rim; x.fillRect(0, 0, s, t);
 }, 384, 256);
+
+// Lunar ground: grey dust and grit with scattered craters (a dark floor, a lit rim), tiled across the whole surface. Near
+// white and neutral, so the vertex colours of the terrain tint it.
+export const regolithSkin = () => skin('regolith', (x, h, s, r) => {
+  x.fillStyle = '#d9d9de'; x.fillRect(0, 0, s, s);
+  for (let i = 0; i < 40; i++) { x.fillStyle = `rgba(${r() < 0.5 ? '255,255,255' : '60,60,70'},${0.04 + r() * 0.07})`; x.beginPath(); x.arc(r() * s, r() * s, (10 + r() * 40), 0, 7); x.fill(); }
+  speck(x, s, r, 9000, '40,40,50', 0.2, 1.6); speck(x, s, r, 6000, '255,255,255', 0.35, 1.6);
+  for (let i = 0; i < 26; i++) {
+    const cx = r() * s, cy = r() * s, rad = 6 + r() * 26;
+    const g = x.createRadialGradient(cx, cy, rad * 0.2, cx, cy, rad); g.addColorStop(0, 'rgba(40,40,50,0.42)'); g.addColorStop(0.8, 'rgba(40,40,50,0.18)'); g.addColorStop(1, 'rgba(40,40,50,0)');
+    x.fillStyle = g; x.beginPath(); x.arc(cx, cy, rad, 0, 7); x.fill();
+    x.strokeStyle = 'rgba(255,255,255,0.4)'; x.lineWidth = 2; x.beginPath(); x.arc(cx, cy, rad * 0.95, Math.PI * 1.1, Math.PI * 1.9); x.stroke();
+    h.fillStyle = '#4a4a4a'; h.beginPath(); h.arc(cx, cy, rad * 0.8, 0, 7); h.fill();
+    h.strokeStyle = '#c0c0c0'; h.lineWidth = 3; h.beginPath(); h.arc(cx, cy, rad * 0.95, 0, 7); h.stroke();
+  }
+  speck(h, s, r, 4000, '255,255,255', 0.4, 1.4);
+}, 512);
+
+// The glass of a habitat dome: a clear blue tint with a geodesic frame (triangles) of white struts. Mostly transparent.
+export const glassSkin = () => skin('glass', (x, h, s, r) => {
+  x.clearRect(0, 0, s, s);
+  x.fillStyle = 'rgba(110,170,235,0.20)'; x.fillRect(0, 0, s, s);
+  const cols = 12, rows = 6, cw = s / cols, rh = s / rows;
+  x.strokeStyle = 'rgba(240,248,255,0.92)'; x.lineWidth = 3.5; x.beginPath();
+  for (let j = 0; j <= rows; j++) { x.moveTo(0, j * rh); x.lineTo(s, j * rh); }
+  for (let j = 0; j < rows; j++) for (let i = 0; i <= cols; i++) {
+    const off = j % 2 ? cw / 2 : 0;
+    x.moveTo(i * cw + off, j * rh); x.lineTo(i * cw + off + cw / 2, (j + 1) * rh);
+    x.moveTo(i * cw + off, j * rh); x.lineTo(i * cw + off - cw / 2, (j + 1) * rh);
+  }
+  x.stroke();
+  const glint = x.createLinearGradient(0, 0, s, s * 0.6); glint.addColorStop(0, 'rgba(255,255,255,0.35)'); glint.addColorStop(0.3, 'rgba(255,255,255,0)');
+  x.fillStyle = glint; x.fillRect(0, 0, s, s);
+}, 256);
+
+// A small flag for the cabin: an invented emblem (a blue disc with a white star on white, an orange stripe), not a real one.
+export const flagSkin = () => skin('flag', (x, h, s, r) => {
+  x.fillStyle = '#f7f9fc'; x.fillRect(0, 0, s, s);
+  x.fillStyle = '#f0a030'; x.fillRect(0, s * 0.78, s, s * 0.12);
+  x.fillStyle = '#2f6fe0'; x.beginPath(); x.arc(s / 2, s * 0.42, s * 0.3, 0, 7); x.fill();
+  x.fillStyle = '#fff'; x.beginPath();
+  for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i * Math.PI) / 5, rad = i % 2 ? s * 0.07 : s * 0.17; x.lineTo(s / 2 + Math.cos(a) * rad, s * 0.42 + Math.sin(a) * rad); }
+  x.closePath(); x.fill();
+}, 128);
+
+// The planet in the sky: oceans, continents, clouds and ice caps painted on a plain equirectangular map, shaded lighter on one
+// side. Plain CanvasTextures (not skins), used on unlit spheres.
+export const planetMap = (kind = 'earth') => {
+  const key = 'planet-' + kind;
+  if (cache.has(key)) return cache.get(key).map;
+  const w = 1024, hgt = 512, c = document.createElement('canvas'); c.width = w; c.height = hgt;
+  const x = c.getContext('2d'), r = lcg(kind.length * 311 + 7);
+  if (kind === 'earth') {
+    const sea = x.createLinearGradient(0, 0, 0, hgt); sea.addColorStop(0, '#173f8a'); sea.addColorStop(0.5, '#1d62c4'); sea.addColorStop(1, '#173f8a');
+    x.fillStyle = sea; x.fillRect(0, 0, w, hgt);
+    for (let i = 0; i < 26; i++) {
+      const cx = r() * w, cy = hgt * (0.2 + r() * 0.6);
+      for (let k = 0; k < 14; k++) { x.fillStyle = r() < 0.35 ? '#8a7a4c' : '#3f8a46'; x.beginPath(); x.ellipse(cx + (r() - 0.5) * 90, cy + (r() - 0.5) * 50, 14 + r() * 40, 8 + r() * 24, r() * 3, 0, 7); x.fill(); }
+    }
+    for (let i = 0; i < 90; i++) { x.fillStyle = `rgba(255,255,255,${0.18 + r() * 0.3})`; x.beginPath(); x.ellipse(r() * w, r() * hgt, 20 + r() * 70, 5 + r() * 16, (r() - 0.5) * 0.8, 0, 7); x.fill(); }
+    x.fillStyle = 'rgba(240,248,255,0.9)'; x.fillRect(0, 0, w, 22); x.fillRect(0, hgt - 22, w, 22);
+  } else {
+    x.fillStyle = '#8d8d94'; x.fillRect(0, 0, w, hgt);
+    for (let i = 0; i < 180; i++) { const cx = r() * w, cy = r() * hgt, rad = 4 + r() * 26; const g = x.createRadialGradient(cx, cy, 1, cx, cy, rad); g.addColorStop(0, 'rgba(40,40,48,0.5)'); g.addColorStop(1, 'rgba(40,40,48,0)'); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, rad, 0, 7); x.fill(); }
+    for (let i = 0; i < 40; i++) { x.fillStyle = `rgba(210,210,215,${0.1 + r() * 0.2})`; x.beginPath(); x.arc(r() * w, r() * hgt, 20 + r() * 60, 0, 7); x.fill(); }
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.userData.keep = true;
+  cache.set(key, { map: t });
+  return t;
+};

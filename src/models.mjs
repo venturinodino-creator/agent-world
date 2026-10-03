@@ -2,13 +2,12 @@
 // terracotta domes, red-and-white towers and tiny robots. Everything is built from simple three.js shapes and
 // dressed with procedural textures (panels, plaster, shingles, wood), so there are no model or image files to load.
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { panelSkin, ribSkin, plasterSkin, domeSkin, shingleSkin, solarSkin, crateSkin, concreteSkin, fabricSkin, visorSkin } from './textures.mjs';
+import { panelSkin, solarSkin, crateSkin, concreteSkin, fabricSkin, visorSkin, glassSkin, flagSkin } from './textures.mjs';
 
 export const PALETTE = { white: 0xf3f6ff, ice: 0xa9d3ff, iceDark: 0x78b4f0, blue: 0x3b72f2, red: 0xe2493a, teal: 0x2fb89b,
-  brown: 0x7a4130, terracotta: 0xe08a4a, slate: 0x2c3050, yellow: 0xf2c94c };
-// Roof colour (body) and window/stripe glow by status. "ok" is the blue roof of the reference.
+  brown: 0x7a4130, terracotta: 0xe08a4a, slate: 0x2c3050, yellow: 0xf2c94c, orange: 0xf0a030, grey: 0x8f97a3 };
+// Accent-band colour (body) and window/door glow by status. "ok" is the blue roof of the reference.
 export const STATUS = {
   ok: { body: 0x3b72f2, glow: 0x7fd6ff },
   running: { body: 0x2fb8ff, glow: 0xd4fbff },
@@ -93,122 +92,161 @@ const mesh = (geo, mat, x = 0, y = 0, z = 0) => {
   geo.computeBoundingSphere(); m.castShadow = geo.boundingSphere.radius >= 0.3;
   return m;
 };
-const HALF = (r, seg = 16) => new THREE.SphereGeometry(r, seg, 8, 0, Math.PI * 2, 0, Math.PI / 2);
-const DRUM = (rTop, rBot, h) => new THREE.CylinderGeometry(rTop, rBot, h, 8);   // an octagonal drum
 
-// A rounded box with its default smoothing is 300 triangles, which adds up over a few thousand small parts: tiny parts
-// are plain boxes and larger ones get a single bevel step.
-const round = (w, h, d, r = 0.03) => (Math.max(w, h, d) < 0.2 ? new THREE.BoxGeometry(w, h, d) : new RoundedBoxGeometry(w, h, d, 1, r));
 
-// The building for a GitHub Actions workflow: an ice-blue drum with a status-coloured roof and windows, a
-// white hatch and one of three rooftop props (solar panel, stacked crates, cubes), like the reference. It now has
-// a concrete plinth, riveted panels, framed windows, a drain pipe and a roof vent.
-export function buildTower(status, variant = 0) {
-  const s = STATUS[status] || STATUS.ok, g = new THREE.Group();
-  const roof = skinned(ribSkin(s.body), { roughness: 0.35, metalness: 0.25, clearcoat: 0.4, clearcoatRoughness: 0.3 }, true), windows = glow(s.glow, 1.1), frame = toy(DARK, { roughness: 0.6 });
-  const white = () => skinned(panelSkin(PALETTE.white)), crate = c => skinned(crateSkin(c), { roughness: 0.7 });
-  g.add(mesh(DRUM(0.5, 0.53, 0.05), skinned(concreteSkin(0x8d93a3), { roughness: 0.9 }), 0, 0.025, 0));
-  g.add(mesh(DRUM(0.44, 0.47, 0.5), skinned(panelSkin(PALETTE.ice)), 0, 0.25, 0));
-  g.add(mesh(DRUM(0.485, 0.485, 0.06), white(), 0, 0.3, 0));
-  for (const [x, z, r] of [[0.45, 0, 0], [-0.45, 0, 0], [0, 0.45, Math.PI / 2], [0, -0.45, Math.PI / 2]]) {
-    const f = mesh(round(0.05, 0.17, 0.2, 0.012), frame, x * 0.97, 0.2, z * 0.97); f.rotation.y = r; g.add(f);
-    const w = mesh(round(0.06, 0.14, 0.17, 0.02), windows, x, 0.2, z); w.rotation.y = r; g.add(w);
-  }
-  g.add(mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.5, 6), toy(0x9aa3b4, { metalness: 0.6, roughness: 0.35 }), 0.4, 0.28, 0.17));
-  g.add(mesh(DRUM(0.34, 0.45, 0.14), roof, 0, 0.57, 0));
-  g.add(mesh(DRUM(0.22, 0.26, 0.07), white(), 0, 0.66, 0));
-  g.add(mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.06, 8), frame, -0.15, 0.7, -0.1));
-  if (variant === 0) {
-    const panel = mesh(round(0.32, 0.05, 0.22, 0.02), skinned(solarSkin(PALETTE.blue), { roughness: 0.2, metalness: 0.3 }), 0, 0.78, 0); panel.rotation.set(-0.35, 0.4, 0); g.add(panel);
-    g.add(mesh(round(0.12, 0.12, 0.12), crate(PALETTE.teal), 0.2, 0.74, 0.1));
-  } else if (variant === 1) {
-    g.add(mesh(round(0.2, 0.12, 0.2), crate(PALETTE.red), 0.02, 0.74, 0.02));
-    g.add(mesh(round(0.2, 0.1, 0.2), crate(PALETTE.white), 0.02, 0.85, 0.02));
-    g.add(mesh(round(0.12, 0.1, 0.12), crate(PALETTE.red), 0.02, 0.95, 0.02));
-  } else {
-    g.add(mesh(round(0.14, 0.14, 0.14), crate(PALETTE.teal), -0.1, 0.77, 0));
-    g.add(mesh(round(0.14, 0.14, 0.14), crate(PALETTE.red), 0.1, 0.77, 0.04));
-  }
-  g.userData.mats = { body: roof, ring: windows };
+// ---- the moon base: pale panelled hulls with blue and orange trim, glass geodesic domes, steel struts, glowing doors.
+// Each building has its status in two places: an accent band (the `body` material, blue / cyan / red / amber / grey) and
+// a glowing door or window (the `ring` material), which is what pulses when the agent is working.
+const HULL = 0xdfe3ea, HULL_D = 0xa3abb8, STEEL = 0x5a6270, BLUE = 0x2f6fe0, ORANGE = 0xf0a030, DARKM = 0x2a2f3a;
+const hull = () => skinned(panelSkin(HULL), { roughness: 0.55, metalness: 0.12 });
+const hullD = () => skinned(panelSkin(HULL_D), { roughness: 0.5, metalness: 0.2 });
+const steel = () => toy(STEEL, { metalness: 0.65, roughness: 0.38 });
+const blueM = () => toy(BLUE, { roughness: 0.35, metalness: 0.2 });
+const orangeM = () => toy(ORANGE, { roughness: 0.4, metalness: 0.15 });
+const darkM = () => toy(DARKM, { roughness: 0.6 });
+const glassM = () => shared({ map: glassSkin().map, transparent: true, depthWrite: false, roughness: 0.1, metalness: 0.2, side: THREE.DoubleSide });
+const C = (rt, rb, h, seg = 14) => new THREE.CylinderGeometry(rt, rb, h, seg);
+const B = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+// adds a part to a group in one call: geometry, material, position, optional rotation
+const adder = g => (geo, mat, x = 0, y = 0, z = 0, rot) => { const m = mesh(geo, mat, x, y, z); if (rot) m.rotation.set(...rot); g.add(m); return m; };
+const padOf = (put, r = 0.52) => put(C(r, r + 0.03, 0.05), skinned(concreteSkin(0x6a7080), { roughness: 0.9 }), 0, 0.025, 0);
+// the accent band and glowing door every building shares
+const statusMats = status => { const s = STATUS[status] || STATUS.ok; return { band: toy(s.body, { roughness: 0.35, metalness: 0.2 }, true), ring: glow(s.glow, 1.1) }; };
+
+// Habitat dome: a drum with a glass geodesic dome, blue-framed glowing door, antenna. (workflow, variant 1)
+function buildHabDome(status) {
+  const g = new THREE.Group(), put = adder(g), { band, ring } = statusMats(status);
+  padOf(put);
+  put(C(0.46, 0.5, 0.26), hull(), 0, 0.18, 0);
+  put(C(0.472, 0.472, 0.04), band, 0, 0.27, 0);
+  put(C(0.44, 0.47, 0.06), hullD(), 0, 0.33, 0);
+  put(C(0.12, 0.14, 0.2, 10), steel(), 0, 0.47, 0);                  // the machinery you can see through the glass
+  put(new THREE.SphereGeometry(0.05, 8, 6), ring, 0, 0.62, 0);
+  put(new THREE.SphereGeometry(0.4, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), glassM(), 0, 0.36, 0);
+  put(C(0.007, 0.007, 0.2, 5), steel(), 0, 0.86, 0); put(new THREE.SphereGeometry(0.018, 6, 5), glowShared(ORANGE, 1.4), 0, 0.97, 0);
+  put(B(0.2, 0.24, 0.07), blueM(), 0, 0.15, 0.48); put(B(0.13, 0.19, 0.075), ring, 0, 0.14, 0.485); put(B(0.26, 0.03, 0.1), steel(), 0, 0.045, 0.53);
+  g.userData.mats = { body: band, ring };
   return flatten(g);
 }
 
-// The building for Claude and the auto-commit bot: a red tripod rig carrying an ice-blue drum, like the
-// "design-system" rig in the reference.
-export function buildRig(status) {
-  const s = STATUS[status] || STATUS.ok, g = new THREE.Group();
-  const cap = skinned(ribSkin(s.body), { metalness: 0.25 }, true), windows = glow(s.glow, 1.1), legs = toy(PALETTE.red, { metalness: 0.35, roughness: 0.4 });
+// Habitat tube: a long pod lying on feet, blue end bands, a door in the side and a vent on top. (workflow, variant 2)
+function buildHabTube(status) {
+  const g = new THREE.Group(), put = adder(g), { band, ring } = statusMats(status);
+  put(C(0.24, 0.24, 0.8).rotateZ(Math.PI / 2), hull(), 0, 0.3, 0);
+  for (const sx of [-1, 1]) {
+    put(C(0.2, 0.245, 0.07).rotateZ(Math.PI / 2), hullD(), sx * 0.42, 0.3, 0);   // end caps
+    put(C(0.25, 0.25, 0.07).rotateZ(Math.PI / 2), blueM(), sx * 0.22, 0.3, 0);   // blue rings
+    put(B(0.1, 0.1, 0.34), steel(), sx * 0.28, 0.05, 0);                          // feet
+  }
+  put(C(0.248, 0.248, 0.05).rotateZ(Math.PI / 2), band, 0, 0.3, 0);
+  put(B(0.2, 0.2, 0.05), blueM(), 0, 0.27, 0.235); put(B(0.13, 0.14, 0.055), ring, 0, 0.27, 0.24);
+  put(B(0.16, 0.05, 0.12), hullD(), 0.12, 0.56, 0); put(C(0.03, 0.03, 0.05, 8), steel(), -0.14, 0.57, 0);
+  g.userData.mats = { body: band, ring };
+  return flatten(g);
+}
+
+// Round control building: a silo with a status ring at the top, a hatch, a door and small lit windows. (workflow, variant 3)
+function buildSilo(status) {
+  const g = new THREE.Group(), put = adder(g), { band, ring } = statusMats(status);
+  padOf(put, 0.46);
+  put(C(0.36, 0.4, 0.52), hull(), 0, 0.31, 0);
+  put(C(0.37, 0.37, 0.05), band, 0, 0.55, 0);
+  put(C(0.3, 0.36, 0.08), hullD(), 0, 0.62, 0);
+  put(C(0.14, 0.14, 0.05, 12), steel(), 0, 0.68, 0);
+  put(B(0.17, 0.25, 0.06), blueM(), 0, 0.18, 0.385); put(B(0.11, 0.2, 0.065), ring, 0, 0.17, 0.39);
+  for (const sx of [-1, 1]) put(B(0.07, 0.045, 0.04), ring, sx * 0.19, 0.4, 0.31, [0, sx * 0.55, 0]);
+  put(C(0.016, 0.016, 0.34, 6), steel(), -0.3, 0.26, -0.18);
+  g.userData.mats = { body: band, ring };
+  return flatten(g);
+}
+
+// Rocket on a landing pad, for Claude: white hull, blue fins and band, round windows, orange landing legs.
+function buildRocket(status) {
+  const g = new THREE.Group(), put = adder(g), { band, ring } = statusMats(status);
+  put(C(0.56, 0.6, 0.04, 20), darkM(), 0, 0.02, 0);
+  put(new THREE.TorusGeometry(0.5, 0.014, 5, 28), orangeM(), 0, 0.045, 0, [Math.PI / 2, 0, 0]);
+  put(C(0.14, 0.17, 0.66), hull(), 0, 0.52, 0);
+  put(C(0.155, 0.155, 0.05), band, 0, 0.72, 0);
+  put(new THREE.ConeGeometry(0.14, 0.36, 14), hull(), 0, 1.03, 0);
+  put(new THREE.ConeGeometry(0.04, 0.1, 8), blueM(), 0, 1.26, 0);
+  for (const y of [0.6, 0.8]) { put(C(0.05, 0.05, 0.03, 10).rotateX(Math.PI / 2), steel(), 0, y, 0.15); put(C(0.036, 0.036, 0.035, 10).rotateX(Math.PI / 2), ring, 0, y, 0.155); }
+  put(B(0.1, 0.16, 0.03), steel(), 0, 0.32, 0.168); put(B(0.07, 0.12, 0.035), ring, 0, 0.32, 0.172);
   for (let i = 0; i < 3; i++) {
     const pivot = new THREE.Group(); pivot.rotation.y = (i * Math.PI * 2) / 3;
-    const leg = mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.72, 8), legs, 0.2, 0.36, 0); leg.rotation.z = 0.36; pivot.add(leg);
-    pivot.add(mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.03, 8), toy(DARK, { metalness: 0.5 }), 0.37, 0.015, 0));   // foot plate
-    g.add(pivot);
+    const leg = mesh(C(0.014, 0.014, 0.36, 6), orangeM(), 0.24, 0.2, 0); leg.rotation.z = -0.55; pivot.add(leg);
+    pivot.add(mesh(B(0.07, 0.02, 0.07), orangeM(), 0.34, 0.03, 0));
+    const fin = mesh(B(0.14, 0.3, 0.03), blueM(), 0.2, 0.32, 0); fin.rotation.z = -0.2; const finPivot = new THREE.Group(); finPivot.rotation.y = (i * Math.PI * 2) / 3 + Math.PI / 3; finPivot.add(fin);
+    g.add(pivot, finPivot);
   }
-  g.add(mesh(DRUM(0.2, 0.26, 0.3), skinned(panelSkin(PALETTE.ice)), 0, 0.72, 0));
-  g.add(mesh(DRUM(0.27, 0.27, 0.05), windows, 0, 0.76, 0));
-  g.add(mesh(DRUM(0.14, 0.2, 0.1), cap, 0, 0.93, 0));
-  g.add(mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.22, 6), toy(PALETTE.white, { metalness: 0.5 }), 0, 1.09, 0));
-  g.add(mesh(new THREE.SphereGeometry(0.035, 10, 8), glow(s.glow, 1.4), 0, 1.22, 0));
-  g.userData.mats = { body: cap, ring: windows };
+  g.userData.mats = { body: band, ring };
   return flatten(g);
 }
 
-// A terracotta drum with a brown dome: the building for Claude, the auto-commit bot and each repo's headquarters.
-// Plastered walls, a segmented dome, a plinth, a doorway and side vents.
+// Six-wheeled rover, for the auto-commit bot: boxy hull, dark cab, orange stripe, antenna dish and headlights.
+function buildRover(status) {
+  const g = new THREE.Group(), put = adder(g), { band, ring } = statusMats(status);
+  put(B(0.5, 0.14, 0.28), hull(), 0, 0.2, 0);
+  put(B(0.5, 0.025, 0.285), orangeM(), 0, 0.245, 0);
+  put(B(0.1, 0.03, 0.285), band, 0.14, 0.285, 0);
+  put(B(0.24, 0.12, 0.24), hullD(), -0.08, 0.33, 0); put(B(0.02, 0.085, 0.2), darkM(), 0.047, 0.335, 0);
+  for (const sx of [-0.18, 0, 0.18]) for (const sz of [-1, 1]) put(C(0.075, 0.075, 0.07, 10).rotateX(Math.PI / 2), darkM(), sx, 0.08, sz * 0.17);
+  put(C(0.007, 0.007, 0.26, 5), steel(), -0.2, 0.42, -0.08); put(new THREE.SphereGeometry(0.075, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), hull(), -0.2, 0.54, -0.08, [-0.9, 0, 0]);
+  for (const sz of [-1, 1]) put(B(0.02, 0.04, 0.06), ring, 0.255, 0.22, sz * 0.09);
+  g.userData.mats = { body: band, ring };
+  return flatten(g);
+}
+
+// A small cabin with a flagpole, for you: a pale module with an orange door, a lit window and a flag.
+function buildCabin(status) {
+  const g = new THREE.Group(), put = adder(g), { band, ring } = statusMats(status);
+  padOf(put, 0.5);
+  put(B(0.62, 0.3, 0.46), hull(), 0, 0.2, 0);
+  put(B(0.64, 0.04, 0.48), band, 0, 0.36, 0);
+  put(B(0.5, 0.04, 0.34), hullD(), 0, 0.4, 0); put(C(0.04, 0.04, 0.05, 8), steel(), -0.12, 0.44, 0);
+  put(B(0.17, 0.25, 0.05), orangeM(), -0.1, 0.18, 0.24); put(B(0.11, 0.2, 0.055), ring, -0.1, 0.18, 0.245);
+  put(B(0.15, 0.1, 0.03), ring, 0.15, 0.25, 0.235);
+  put(C(0.008, 0.008, 0.72, 5), steel(), 0.28, 0.55, -0.16);
+  put(new THREE.PlaneGeometry(0.24, 0.16), shared({ map: flagSkin().map, side: THREE.DoubleSide, roughness: 0.8 }), 0.4, 0.82, -0.16);
+  g.userData.mats = { body: band, ring };
+  return flatten(g);
+}
+
+// Satellite dish on a round base, for Cowork agents: a big white dish on a yoke, with a feed arm.
+export function buildDish(status) {
+  const g = new THREE.Group(), put = adder(g), { band, ring } = statusMats(status);
+  put(C(0.3, 0.34, 0.14), hullD(), 0, 0.09, 0);
+  put(C(0.31, 0.31, 0.03), band, 0, 0.16, 0);
+  put(C(0.2, 0.2, 0.02), ring, 0, 0.18, 0);
+  put(C(0.07, 0.09, 0.3, 10), steel(), 0, 0.33, 0);
+  put(B(0.22, 0.05, 0.08), steel(), 0, 0.5, 0);
+  put(new THREE.SphereGeometry(0.4, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), hull(), 0, 0.7, 0, [-0.95, 0, 0]);
+  put(C(0.01, 0.01, 0.36, 5), steel(), 0, 0.86, 0.2, [0.5, 0, 0]); put(new THREE.SphereGeometry(0.03, 6, 5), glowShared(ORANGE, 1.4), 0, 1.0, 0.33);
+  g.userData.mats = { body: band, ring };
+  return flatten(g);
+}
+
+// The headquarters of each island, "moon base": a wide drum with a glass geodesic dome, an entrance block with a glowing
+// door and steps, a connector tube each side, and a dish on top.
 export function buildPod(status, scale = 1) {
-  const s = STATUS[status] || STATUS.ok, g = new THREE.Group();
-  const dome = skinned(domeSkin(PALETTE.brown), { roughness: 0.4, metalness: 0.22, clearcoat: 0.5, clearcoatRoughness: 0.25 }, true), stripe = glow(s.glow, 1.0);
-  g.add(mesh(DRUM(0.5, 0.54, 0.05), skinned(concreteSkin(0x9a8f84), { roughness: 0.9 }), 0, 0.025, 0));
-  g.add(mesh(DRUM(0.46, 0.5, 0.42), skinned(plasterSkin(PALETTE.terracotta), { roughness: 0.85 }), 0, 0.21, 0));
-  g.add(mesh(DRUM(0.505, 0.505, 0.05), skinned(plasterSkin(0xb85f2c), { roughness: 0.85 }), 0, 0.12, 0));
-  g.add(mesh(DRUM(0.475, 0.475, 0.04), stripe, 0, 0.38, 0));
-  g.add(mesh(HALF(0.44), dome, 0, 0.4, 0));
-  g.add(mesh(round(0.19, 0.25, 0.05, 0.02), toy(0xf0d8b8, { roughness: 0.8 }), 0, 0.17, 0.465));          // door frame
-  g.add(mesh(round(0.14, 0.2, 0.06, 0.02), toy(0x3a2418, { roughness: 0.7 }), 0, 0.155, 0.47));            // door
-  for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) {
-    const v = mesh(new THREE.BoxGeometry(0.1, 0.012, 0.03), toy(0x4a2a1c), sx * 0.34, 0.24 + k * 0.035, 0.3); v.rotation.y = sx * 0.9; g.add(v);   // vent slats
-  }
-  g.add(mesh(new THREE.BoxGeometry(0.16, 0.08, 0.16), skinned(panelSkin(PALETTE.white)), 0.1, 0.83, 0.05));
-  g.add(mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.3, 6), toy(PALETTE.white, { metalness: 0.5 }), -0.08, 0.95, -0.05));
-  g.add(mesh(new THREE.SphereGeometry(0.04, 10, 8), glow(PALETTE.red, 1.2), -0.08, 1.12, -0.05));
+  const g = new THREE.Group(), put = adder(g), { band, ring } = statusMats(status);
+  put(C(0.58, 0.62, 0.05, 18), skinned(concreteSkin(0x6a7080), { roughness: 0.9 }), 0, 0.025, 0);
+  put(C(0.5, 0.54, 0.3, 18), hull(), 0, 0.2, 0);
+  put(C(0.512, 0.512, 0.045, 18), band, 0, 0.3, 0);
+  put(C(0.52, 0.52, 0.03, 18), blueM(), 0, 0.12, 0);
+  put(C(0.44, 0.5, 0.06, 18), hullD(), 0, 0.37, 0);
+  put(C(0.16, 0.18, 0.28, 10), steel(), 0, 0.54, 0); put(new THREE.SphereGeometry(0.06, 8, 6), ring, 0, 0.7, 0);
+  put(new THREE.SphereGeometry(0.42, 22, 9, 0, Math.PI * 2, 0, Math.PI / 2), glassM(), 0, 0.4, 0);
+  put(C(0.012, 0.012, 0.22, 5), steel(), 0.1, 0.9, 0); put(new THREE.SphereGeometry(0.11, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2), hull(), 0.1, 1.03, 0, [-0.8, 0, 0]);
+  put(B(0.34, 0.27, 0.2), hull(), 0, 0.17, 0.5); put(B(0.22, 0.21, 0.04), blueM(), 0, 0.15, 0.61); put(B(0.15, 0.18, 0.045), ring, 0, 0.14, 0.615);
+  put(B(0.3, 0.03, 0.1), steel(), 0, 0.045, 0.7); put(B(0.26, 0.02, 0.07), steel(), 0, 0.025, 0.76);
+  put(B(0.26, 0.05, 0.02), darkM(), 0, 0.3, 0.605);
+  for (const sx of [-1, 1]) { put(C(0.12, 0.12, 0.34, 10).rotateZ(Math.PI / 2), hull(), sx * 0.58, 0.16, 0.05); put(C(0.125, 0.125, 0.06, 10).rotateZ(Math.PI / 2), blueM(), sx * 0.5, 0.16, 0.05); }
   flatten(g);
   g.scale.setScalar(scale);
-  g.userData.mats = { body: dome, ring: stripe };
+  g.userData.mats = { body: band, ring };
   return g;
 }
 
-// A small white house with a blue roof: the building for a person. Rendered walls, shingles, a brick chimney,
-// a framed door and a window with mullions.
-export function buildHouse(status) {
-  const s = STATUS[status] || STATUS.ok, g = new THREE.Group();
-  const roof = skinned(shingleSkin(s.body), { roughness: 0.7 }, true), door = glow(s.glow, 1.0), trim = toy(0xe6e2da, { roughness: 0.7 });
-  g.add(mesh(round(0.72, 0.42, 0.62, 0.05), skinned(plasterSkin(PALETTE.white), { roughness: 0.85 }), 0, 0.21, 0));
-  const top = mesh(new THREE.ConeGeometry(0.62, 0.36, 4), roof, 0, 0.6, 0); top.rotation.y = Math.PI / 4; g.add(top);
-  g.add(mesh(round(0.1, 0.2, 0.1, 0.01), skinned(plasterSkin(0xb5533c), { roughness: 0.9 }), 0.2, 0.66, -0.12));   // chimney
-  g.add(mesh(round(0.2, 0.28, 0.04, 0.015), trim, 0, 0.14, 0.31));
-  g.add(mesh(round(0.16, 0.24, 0.04, 0.015), door, 0, 0.13, 0.32));
-  g.add(mesh(round(0.19, 0.17, 0.04, 0.015), trim, 0.22, 0.26, 0.31));
-  g.add(mesh(round(0.14, 0.12, 0.04, 0.015), door, 0.22, 0.26, 0.32));
-  g.add(mesh(new THREE.BoxGeometry(0.014, 0.12, 0.05), trim, 0.22, 0.26, 0.335));
-  g.add(mesh(new THREE.BoxGeometry(0.14, 0.014, 0.05), trim, 0.22, 0.26, 0.335));
-  g.add(mesh(round(0.28, 0.03, 0.12, 0.01), skinned(concreteSkin(0x9aa0ad)), 0, 0.015, 0.4));                          // step
-  g.userData.mats = { body: roof, ring: door };
-  return flatten(g);
-}
-
-// A white dish on a drum: the building for a Cowork / local agent.
-export function buildDish(status) {
-  const s = STATUS[status] || STATUS.asleep, g = new THREE.Group();
-  const dish = skinned(panelSkin(PALETTE.white), { metalness: 0.15, roughness: 0.4 }, true), ring = glow(s.glow, 0.9);
-  g.add(mesh(DRUM(0.36, 0.42, 0.26), skinned(panelSkin(PALETTE.ice)), 0, 0.13, 0));
-  g.add(mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.46, 8), toy(PALETTE.white, { metalness: 0.4, roughness: 0.4 }), 0, 0.47, 0));
-  const d = mesh(HALF(0.38, 20), dish, 0, 0.74, 0); d.rotation.x = -0.9; g.add(d);
-  g.add(mesh(new THREE.SphereGeometry(0.06, 10, 8), ring, 0, 0.9, 0.18));
-  g.userData.mats = { body: dish, ring };
-  return flatten(g);
-}
-
-// The little character that works at a building. Arms are kept so they can swing while typing.
 // An astronaut for every agent: a chunky white suit with stripes and a mission patch in the agent's colour (blue for
 // workflows, pink for Claude, red for the bot, orange for Cowork), a big round helmet with a dark glass visor, ear
 // pods, a chest control box with a hose to the backpack, puffy gloves and boots. No face: the visor is just glass.
@@ -256,19 +294,37 @@ export function buildRobot(kind, name) {
   return g;
 }
 
-// The hub in the middle of the world: a tall red-and-white radio tower that pages fly to.
+// The hub in the middle of the world: a lattice radio tower on a landing pad, with a dish and a blinking beacon that pages
+// fly to. `orb` is the beacon and `ring` the glowing band round its foot; the scene pulses both.
+const strut = (a, b, r, mat) => {
+  const A = new THREE.Vector3(...a), Bv = new THREE.Vector3(...b), d = Bv.clone().sub(A), len = d.length();
+  const m = mesh(new THREE.CylinderGeometry(r, r, len, 5), mat, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+  return m;
+};
 export function buildHub() {
-  const g = new THREE.Group(), beacon = glow(0xff6a4a, 1.6), ring = glow(0x7fd6ff, 1.2);
-  g.add(mesh(DRUM(2.5, 2.8, 0.7), skinned(concreteSkin(PALETTE.slate), { roughness: 0.85 }), 0, 0.35, 0));
-  g.add(mesh(DRUM(1.5, 1.7, 1.2), skinned(panelSkin(PALETTE.white)), 0, 1.3, 0));
-  g.add(mesh(DRUM(1.2, 1.5, 0.3), skinned(panelSkin(PALETTE.ice)), 0, 2.05, 0));
-  for (let i = 0; i < 5; i++) g.add(mesh(new THREE.CylinderGeometry(0.42 - i * 0.05, 0.5 - i * 0.05, 0.9, 12), skinned(panelSkin(i % 2 ? PALETTE.white : PALETTE.red), { metalness: 0.2 }), 0, 2.6 + i * 0.9, 0));
-  const platform = mesh(DRUM(0.9, 0.9, 0.12), skinned(panelSkin(PALETTE.white)), 0, 4.6, 0); g.add(platform);
-  const dish = mesh(HALF(0.5, 20), skinned(panelSkin(PALETTE.white), { metalness: 0.15 }), 0.35, 5.0, 0.2); dish.rotation.set(-0.6, 0.5, 0); g.add(dish);
-  g.add(mesh(DRUM(1.28, 1.28, 0.06), ring, 0, 2.2, 0));
-  const orb = glow(0xff6a4a, 1.8);
-  g.add(mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 8), toy(PALETTE.white, { metalness: 0.5 }), 0, 5.4, 0));
-  g.add(mesh(new THREE.SphereGeometry(0.2, 18, 14), orb, 0, 5.95, 0));
+  const g = new THREE.Group(), put = adder(g), ring = glow(0x7fd6ff, 1.2), orb = glow(0xff9a3a, 1.8), beacon = glow(0xff9a3a, 1.6);
+  const st = steel(), blink = glowShared(ORANGE, 1.6);
+  put(C(2.5, 2.8, 0.7, 12), skinned(concreteSkin(0x4c5262), { roughness: 0.85 }), 0, 0.35, 0);
+  put(C(1.7, 1.9, 0.3, 12), hull(), 0, 0.85, 0);
+  put(C(1.62, 1.62, 0.05, 12), ring, 0, 1.02, 0);
+  // four slanted legs, square rings every level and crossed braces between them
+  const corner = (k, y) => { const t = (y - 1.0) / 4.1, w = 0.75 - 0.5 * t, sx = k % 2 ? 1 : -1, sz = k < 2 ? 1 : -1; return [sx * w, y, sz * w]; };
+  const levels = [1.0, 2.0, 3.0, 4.0, 5.1], around = [0, 1, 3, 2];   // the corners in walking order round the square
+  for (let k = 0; k < 4; k++) g.add(strut(corner(k, 1.0), corner(k, 5.1), 0.06, st));
+  levels.forEach((y, li) => {
+    for (let i = 0; i < 4; i++) {
+      const here = around[i], next = around[(i + 1) % 4];
+      if (li) g.add(strut(corner(here, y), corner(next, y), 0.035, st));                             // the square ring at this level
+      if (li < levels.length - 1) g.add(strut(corner(here, y), corner(next, levels[li + 1]), 0.028, st));   // a diagonal brace up to the next
+    }
+  });
+  put(C(0.55, 0.6, 0.12, 10), hull(), 0, 5.15, 0);
+  put(C(0.04, 0.04, 1.3, 6), st, 0, 5.85, 0);
+  put(new THREE.SphereGeometry(0.55, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), hull(), 0.4, 5.45, 0.2, [-0.7, 0.5, 0]);
+  put(C(0.02, 0.02, 0.6, 5), st, 0.55, 5.8, 0.28, [0.55, 0.5, 0]);
+  put(new THREE.SphereGeometry(0.12, 12, 8), orb, 0, 6.55, 0);
+  for (const y of [2.0, 3.0, 4.0]) for (const k of [0, 3]) put(new THREE.SphereGeometry(0.06, 6, 5), blink, corner(k, y)[0], y, corner(k, y)[2]);
   g.userData = { orb, ring, beacon };
   return flatten(g);
 }
@@ -308,9 +364,12 @@ export function workingIcon() {
   return s;
 }
 
-// Variety between neighbouring buildings comes from a stable number per agent (0..1).
+// Variety between neighbouring buildings comes from a stable number per agent (0..1). Workflows are habitats (dome, tube
+// or silo), Claude is a rocket, the auto-commit bot a rover, you a cabin with a flag, and Cowork agents are dishes.
+const HABITATS = [buildHabDome, buildHabTube, buildSilo];
 export const buildingFor = (agent, status, pick = 0) =>
-  agent.kind === 'workflow' ? buildTower(status, Math.floor(pick * 3) % 3)
-  : agent.kind === 'human' ? buildHouse(status)
-  : agent.kind === 'local' ? buildDish(status) : buildRig(status);
+  agent.kind === 'workflow' ? HABITATS[Math.floor(pick * 3) % 3](status)
+  : agent.kind === 'human' ? buildCabin(status)
+  : agent.kind === 'local' ? buildDish(status)
+  : agent.name === 'Auto-commit bot' ? buildRover(status) : buildRocket(status);
 export { THREE };

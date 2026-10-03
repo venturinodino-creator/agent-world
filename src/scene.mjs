@@ -4,7 +4,8 @@
 import { THREE, STATUS, HEALTH, PALETTE, buildPod, buildRobot, buildingFor, buildHub, symbolSprite, workingIcon, sleepSprite, bakeStatics } from './models.mjs';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { panelSkin, solarSkin, crateSkin, fabricSkin, visorSkin, sandSkin } from './textures.mjs';
+import { panelSkin, solarSkin, crateSkin, fabricSkin, visorSkin } from './textures.mjs';
+import { skyDome, planets, moonGround } from './space.mjs';
 import { createPost } from './post.mjs';
 import { addBlob, blobGeometry, blobMaterial } from './grounding.mjs';
 import { tileOffsets } from './world.mjs';
@@ -12,50 +13,16 @@ import { pose, hash, errand, routeBot } from './anim.mjs';
 
 const WALK_UNITS = 0.5 / 14;          // pose offsets are in old pixel units; this turns them into tiles
 const RESULT_HEX = { ok: 0x41e08a, fail: 0xff5d6c, running: 0x3fd7e8 };
-const FOG = 0xf0dbc0;
+const FOG = 0x05070e;   // space: distance fades to black, where the stars take over
 
 // Island floor colours by health: dark slate normally, royal blue while something is working (as in the reference).
 const FLOOR = {
   ok: ['#3c3d4a', '#575865'], running: ['#2257e6', '#1a43b8'], fail: ['#46373d', '#6a4752'],
   idle: ['#2d4a52', '#47707b'], dormant: ['#43464f', '#5b5f6b'],
 };
-const SIDE = { ok: 0xe0603f, running: 0xe0603f, fail: 0xe0603f, idle: 0xe0603f, dormant: 0x6b6f7a };
+const SIDE = { ok: 0x59616f, running: 0x59616f, fail: 0x59616f, idle: 0x59616f, dormant: 0x3c4150 };   // steel plate edges
 
 const lcg = seed => () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
-
-// ----- sky and ground
-function skyDome() {
-  const mat = new THREE.ShaderMaterial({
-    side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { top: { value: new THREE.Color('#4f8fe0') }, mid: { value: new THREE.Color('#a9c9ee') }, horizon: { value: new THREE.Color('#f6dfc4') }, below: { value: new THREE.Color('#ead0aa') } },
-    vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: `varying vec3 vDir; uniform vec3 top; uniform vec3 mid; uniform vec3 horizon; uniform vec3 below;
-      void main(){ float h = vDir.y;
-        vec3 c = mix(horizon, mid, smoothstep(0.0, 0.22, h)); c = mix(c, top, smoothstep(0.2, 0.75, h));
-        c = mix(c, below, smoothstep(0.0, -0.15, h)); gl_FragColor = vec4(c, 1.0); }`,
-  });
-  return new THREE.Mesh(new THREE.SphereGeometry(1500, 32, 16), mat);
-}
-
-// Low sandy dunes that stay flat under the islands and roll away towards the horizon.
-function desert(R) {
-  const size = 2400, seg = 96, geo = new THREE.PlaneGeometry(size, size, seg, seg); geo.rotateX(-Math.PI / 2);
-  const pos = geo.attributes.position, colors = new Float32Array(pos.count * 3), a = new THREE.Color('#dcaa6e'), b = new THREE.Color('#c88a50'), c = new THREE.Color();
-  const flatUntil = R + 14;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), z = pos.getZ(i), d = Math.hypot(x, z), k = Math.min(1, Math.max(0, (d - flatUntil) / 60));
-    const dune = Math.sin(x * 0.02) * 3.2 + Math.sin(z * 0.03 + 1.3) * 2.6 + Math.sin((x + z) * 0.009) * 9;
-    pos.setY(i, -0.4 + k * k * (3 - 2 * k) * dune);
-    c.copy(a).lerp(b, 0.5 + 0.5 * Math.sin(x * 0.035 + z * 0.02 + Math.sin(z * 0.05) * 2));
-    colors.set([c.r, c.g, c.b], i * 3);
-  }
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3)); geo.computeVertexNormals();
-  // the dune colours come from the vertices; a tiled grain and ripple texture on top makes it read as sand up close
-  const sand = sandSkin(); sand.map.repeat.set(300, 300); sand.bumpMap.repeat.set(300, 300);
-  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, map: sand.map, bumpMap: sand.bumpMap, bumpScale: 0.8 }));
-  m.receiveShadow = true;
-  return m;
-}
 
 // A square-tile floor with thin light seams and a little speckle, drawn once per colour.
 const floorCache = new Map();
@@ -95,23 +62,23 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(FOG); scene.fog = new THREE.FogExp2(FOG, 0.0028);
-  scene.add(skyDome());
+  scene.background = new THREE.Color(FOG); scene.fog = new THREE.FogExp2(FOG, 0.0026);
+  scene.add(skyDome(), planets());
   const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 3200);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.dampingFactor = 0.08; controls.maxPolarAngle = 1.38; controls.minDistance = 5;
 
   // a soft studio environment gives the metal, glass and plastic something to reflect, so they read as real materials
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.28;
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.2;
   // Lighting with contrast is what makes shapes look solid: a strong warm sun, a cool sky fill and a faint
   // back-light that rims every figure. The darker shadow side is what the ambient occlusion pass then deepens.
-  scene.add(new THREE.HemisphereLight(0xcfe0ff, 0xd9a56b, 0.62));
-  const sun = new THREE.DirectionalLight(0xffefd2, 3.4);
+  scene.add(new THREE.HemisphereLight(0x8ea4d6, 0x45464f, 0.5));
+  const sun = new THREE.DirectionalLight(0xfff6ea, 3.9);
   const shadowSize = Math.min(2048, renderer.capabilities.maxTextureSize);
   renderer.shadowMap.autoUpdate = false;   // redrawn every other frame in update(): shadows barely move between frames
   sun.castShadow = true; sun.shadow.mapSize.set(shadowSize, shadowSize); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.025; sun.shadow.radius = 3;
-  const rim = new THREE.DirectionalLight(0xaad0ff, 0.9); rim.position.set(-30, 18, -40);
+  const rim = new THREE.DirectionalLight(0x6a8cff, 1.2); rim.position.set(-30, 18, -40);
   scene.add(sun, sun.target, rim);
 
   const S = { world: null, root: new THREE.Group(), agents: new Map(), pickables: [], rocks: [], hub: null, focus: null, papers: new Map(),
@@ -179,10 +146,10 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       tileOffsets(isl.rings).forEach((t, i) => {
         const x = isl.x + t.x, z = isl.z + t.z;
         if (i === 0) return;
-        if (i <= isl.agentCount) { if (rnd() < 0.5) crates.push([x - 0.45, z - 0.32, rnd() < 0.5 ? PALETTE.red : PALETTE.white]); return; }
+        if (i <= isl.agentCount) { if (rnd() < 0.5) crates.push([x - 0.45, z - 0.32, rnd() < 0.5 ? PALETTE.orange : 0xd9dde4]); return; }
         const r = rnd();
         if (r < 0.4) for (const [dx, dz] of [[-0.27, -0.2], [0.27, -0.2], [-0.27, 0.2], [0.27, 0.2]]) panels.push([x + dx, z + dz]);
-        else if (r < 0.65) { const k = 1 + Math.floor(rnd() * 3); for (let j = 0; j < k; j++) crates.push([x + (rnd() - 0.5) * 0.9, z + (rnd() - 0.5) * 0.9, [PALETTE.red, PALETTE.white, PALETTE.teal, PALETTE.blue][Math.floor(rnd() * 4)]]); }
+        else if (r < 0.65) { const k = 1 + Math.floor(rnd() * 3); for (let j = 0; j < k; j++) crates.push([x + (rnd() - 0.5) * 0.9, z + (rnd() - 0.5) * 0.9, [PALETTE.orange, 0xd9dde4, PALETTE.blue, PALETTE.grey][Math.floor(rnd() * 4)]]); }
         else if (r < 0.8) tanks.push([x + (rnd() - 0.5) * 0.6, z + (rnd() - 0.5) * 0.6]);
       });
     });
@@ -194,14 +161,14 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     };
     add(panel, panels, () => 0.3, () => PALETTE.blue, (p, e) => e.set(-0.45, 0.3, 0), solarSkin(0xffffff));
     add(crate, crates, () => 0.27, p => p[2], (p, e, i) => e.set(0, i * 0.7, 0), crateSkin(0xf4f1ec));
-    add(tank, tanks, () => 0.32, () => PALETTE.white, (p, e) => e.set(0, 0, 0), panelSkin(0xffffff));
+    add(tank, tanks, () => 0.32, () => 0xc9ced8, (p, e) => e.set(0, 0, 0), panelSkin(0xffffff));
   }
 
   // Little workers shuttling between the buildings and each island's headquarters all day: out with a crate,
   // back empty-handed. Each has a body, head, hard hat, two walking legs and two swinging arms (instanced).
   // Buildings that are working right now get extra helpers that run faster, so busy places look busy.
   function ambientBots(world) {
-    const list = [], rnd = lcg(5), crateColors = [PALETTE.red, PALETTE.white, PALETTE.teal, PALETTE.yellow];
+    const list = [], rnd = lcg(5), crateColors = [PALETTE.orange, 0xd9dde4, PALETTE.blue, PALETTE.grey];
     const VEST = [0xff9a3c, 0xdbeaff, 0xff5a5a, 0x9fcdf5, 0xffd23c, 0x41e0a0], HAT = [0xffd23c, 0xff9a3c, 0xff5a5a, 0x3b72f2, 0xf3f6ff];
     const route = (isl, ax, az, sp, ph) => {
       const dx = ax - isl.x, dz = az - isl.z, len = Math.hypot(dx, dz) || 1;
@@ -265,7 +232,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
   function setWorld(world, { refit = false } = {}) {
     clear(); S.world = world;
     const R = world.bounds.radius, root = S.root;
-    root.add(desert(R));
+    root.add(moonGround(R));
     // each island: a coral-sided slate platform with a square-tile floor and a bright health-coloured rim
     const addPlate = (isl, floor, rimHex, rimK) => {
       const tex = floorTexture(floor).clone(); tex.needsUpdate = true;
@@ -306,7 +273,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       building.userData.agentId = a.id; addBlob(building, 0.72, 0.05, 0.55);
       const robot = buildRobot(a.kind, a.name); robot.position.set(a.pos.x, 0.14, a.pos.z + 0.7);
       robot.scale.setScalar(1.5); robot.userData.agentId = a.id; addBlob(robot, 0.2, 0.05, 0.55);
-      const carry = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({ color: PALETTE.red, roughness: 0.45 }));
+      const carry = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({ color: PALETTE.orange, roughness: 0.45 }));
       carry.position.set(0, 1.0, 0); carry.visible = false; robot.add(carry);
       const sparks = a.status === 'running' ? Array.from({ length: 6 }, () => { const sp = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), new THREE.MeshBasicMaterial({ color: 0xfff1a8 })); root.add(sp); return sp; }) : [];
       const halo = a.status === 'running' ? new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.04, 8, 32), new THREE.MeshBasicMaterial({ color: 0x7fe9ff, transparent: true })) : null;
@@ -326,7 +293,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     // drifting dark rocks above the world
     const rnd = lcg(7);
     for (let i = 0; i < 16; i++) {
-      const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5 + rnd() * 1.2, 0), new THREE.MeshStandardMaterial({ color: 0x5b4234, roughness: 0.95, flatShading: true }));
+      const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5 + rnd() * 1.2, 0), new THREE.MeshStandardMaterial({ color: 0x6e6e76, roughness: 0.95, flatShading: true }));
       const a = rnd() * Math.PI * 2, d = R * (1.1 + rnd() * 0.9), y = 1 + rnd() * 10;
       rock.position.set(Math.cos(a) * d, y, Math.sin(a) * d); rock.castShadow = true; rock.userData = { y, ph: rnd() * 6, spin: 0.1 + rnd() * 0.3 };
       root.add(rock); S.rocks.push(rock);
@@ -400,7 +367,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
         const back = !er.carrying && !er.depositing, k = back ? -1 : 1;
         yaw = Math.atan2((r.hq.x - r.bx) * k, (r.hq.z - r.bz) * k);
         y = 0.14 + (er.depositing ? Math.abs(Math.sin(t * 12)) * 0.12 : Math.abs(Math.sin(t * 9 + r.ph * 5)) * 0.05);
-        walking = !er.depositing; r.carry.material.color.setHex(RESULT_HEX[er.result] ?? PALETTE.red);
+        walking = !er.depositing; r.carry.material.color.setHex(RESULT_HEX[er.result] ?? PALETTE.orange);
         if (er.depositing) { const hq = S.hqs.get(a.island); if (hq) hq.last = t; }
       }
       r.carry.visible = !!er?.carrying;
