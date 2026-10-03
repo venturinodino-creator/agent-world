@@ -5,7 +5,7 @@ import { THREE, STATUS, HEALTH, PALETTE, buildPod, buildRobot, buildingFor, buil
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { panelSkin, solarSkin, crateSkin, fabricSkin, faceSkin } from './textures.mjs';
+import { panelSkin, solarSkin, crateSkin, fabricSkin, faceSkin, sandSkin } from './textures.mjs';
 import { createPost } from './post.mjs';
 import { addBlob, blobGeometry, blobMaterial } from './grounding.mjs';
 import { tileOffsets } from './world.mjs';
@@ -51,7 +51,9 @@ function desert(R) {
     colors.set([c.r, c.g, c.b], i * 3);
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3)); geo.computeVertexNormals();
-  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0 }));
+  // the dune colours come from the vertices; a tiled grain and ripple texture on top makes it read as sand up close
+  const sand = sandSkin(); sand.map.repeat.set(300, 300); sand.bumpMap.repeat.set(300, 300);
+  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, map: sand.map, bumpMap: sand.bumpMap, bumpScale: 0.8 }));
   m.receiveShadow = true;
   return m;
 }
@@ -429,7 +431,9 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
         if (dy) local.multiply(out.makeTranslation(0, dy, 0));
         im.setMatrixAt(idx, out.multiplyMatrices(base, local));
       };
+      const turn = (S.frame || 0) & 1;   // half the workers move on even frames, half on odd ones
       list.forEach((b, i) => {
+        if ((i & 1) !== turn) return;
         const w = routeBot(b, t), x = b.ax + (b.bx - b.ax) * w.u, z = b.az + (b.bz - b.az) * w.u;
         const nx = -(b.bz - b.az), nz = b.bx - b.ax, nl = Math.hypot(nx, nz) || 1, sway = Math.sin(w.u * Math.PI) * 0.3 * b.side;
         const px = x + (nx / nl) * sway, pz = z + (nz / nl) * sway, dir = w.forward ? 1 : -1;
@@ -482,7 +486,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     }
     renderer.shadowMap.needsUpdate = (S.frame = (S.frame || 0) + 1) % 2 === 1;
     post.tick(performance.now());
-    post.render();
+    post.render(camera.position.distanceTo(controls.target));
   }
 
   return { setFx: on => post.setEnabled(on), fxOn: () => post.enabled, setWorld, update, pick, project, agentHead, islandLabel, focusAgent, focusIsland, fit, zoom, setInset, nearAgents, cameraDistance, hasAgent: id => S.agents.has(id),

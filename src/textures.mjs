@@ -148,24 +148,74 @@ export const fabricSkin = () => skin('fabric', (x, h, s, r) => {
   }
   speck(x, s, r, 1400, '0,0,0', 0.1, 1); speck(x, s, r, 800, '255,255,255', 0.12, 1);
   for (let i = 0; i < s; i += 3) { h.fillStyle = '#707070'; h.fillRect(i, 0, 1, s); h.fillRect(0, i, s, 1); }
+  // rows of stitching, and the shadow of a seam beside each
+  for (const py of [s * 0.25, s * 0.75]) {
+    x.fillStyle = 'rgba(0,0,0,0.12)'; x.fillRect(0, py + 2, s, 3);
+    for (let px = 0; px < s; px += 12) { x.fillStyle = 'rgba(40,30,20,0.34)'; x.fillRect(px, py, 7, 1.6); h.fillStyle = '#a8a8a8'; h.fillRect(px, py, 7, 2); }
+  }
 });
 
-// A face wrapped on the head sphere, centred on the front (u = 0.25): eyes, brows, nose, mouth, ears and a hairline
-// at the back. The base is white so the instance colour sets the skin tone.
+// A face wrapped on the head sphere, centred on the front (u = 0.25), drawn at 512 so it holds up when you zoom in:
+// skin variation and pores, shaded cheeks and jaw, eyes with lids and a catchlight, brows, nose, lips, ears and
+// hair at the back. The base is white so the instance colour sets the skin tone.
 export const faceSkin = () => skin('face', (x, h, s, r) => {
+  const k = s / 256, fx = s * 0.25;
   x.fillStyle = '#ffffff'; x.fillRect(0, 0, s, s);
-  const fx = s * 0.25;
-  x.fillStyle = 'rgba(70,42,24,0.95)';   // hair at the back and nape
+  // skin: soft blotches and pores
+  for (let i = 0; i < 70; i++) { x.fillStyle = `rgba(${r() < 0.5 ? '200,110,80' : '255,235,220'},${0.03 + r() * 0.05})`; x.beginPath(); x.arc(r() * s, r() * s, (6 + r() * 22) * k, 0, 7); x.fill(); }
+  speck(x, s, r, 3500, '90,45,30', 0.07, 1.2 * k);
+  // shading: darker at the temples and under the jaw, so the face reads as round
+  const jaw = x.createRadialGradient(fx, s * 0.72, 2 * k, fx, s * 0.72, 58 * k); jaw.addColorStop(0, 'rgba(120,60,35,0.16)'); jaw.addColorStop(1, 'rgba(120,60,35,0)');
+  x.fillStyle = jaw; x.fillRect(0, 0, s, s);
+  for (const side of [-1, 1]) {
+    const t = x.createRadialGradient(fx + side * 52 * k, s * 0.44, 2 * k, fx + side * 52 * k, s * 0.44, 30 * k); t.addColorStop(0, 'rgba(120,60,35,0.10)'); t.addColorStop(1, 'rgba(120,60,35,0)');
+    x.fillStyle = t; x.fillRect(0, 0, s, s);
+  }
+  // hair at the back and nape, with strands
+  x.fillStyle = 'rgba(64,40,26,0.96)';
   x.beginPath(); x.ellipse(s * 0.75, s * 0.4, s * 0.3, s * 0.34, 0, 0, 7); x.fill();
   x.fillRect(s * 0.52, 0, s * 0.46, s * 0.46);
-  for (const ex of [0, s * 0.5, s]) { x.fillStyle = 'rgba(150,80,50,0.35)'; x.beginPath(); x.ellipse(ex, s * 0.52, 6, 11, 0, 0, 7); x.fill(); }
-  for (const dx of [-0.075, 0.075]) {
-    const ex = fx + dx * s;
-    x.fillStyle = 'rgba(255,150,130,0.3)'; x.beginPath(); x.ellipse(ex, s * 0.58, 8, 5, 0, 0, 7); x.fill();
-    x.fillStyle = '#1b1b24'; x.beginPath(); x.ellipse(ex, s * 0.49, 3.4, 4.6, 0, 0, 7); x.fill();
-    x.fillStyle = '#fff'; x.beginPath(); x.arc(ex + 1, s * 0.475, 1.2, 0, 7); x.fill();
-    x.strokeStyle = 'rgba(50,30,20,0.85)'; x.lineWidth = 2.4; x.beginPath(); x.moveTo(ex - 6, s * 0.43); x.lineTo(ex + 6, s * 0.42); x.stroke();
+  x.lineWidth = 1.2 * k;
+  for (let i = 0; i < 160; i++) { x.strokeStyle = `rgba(${r() < 0.5 ? '25,15,10' : '110,75,48'},0.4)`; const px = s * (0.5 + r() * 0.48), py = r() * s * 0.5; x.beginPath(); x.moveTo(px, py); x.lineTo(px + (r() - 0.5) * 6 * k, py + 10 * k + r() * 14 * k); x.stroke(); }
+  for (const ex of [0, s * 0.5, s]) { x.fillStyle = 'rgba(150,80,50,0.38)'; x.beginPath(); x.ellipse(ex, s * 0.52, 7 * k, 12 * k, 0, 0, 7); x.fill(); x.strokeStyle = 'rgba(110,50,30,0.35)'; x.lineWidth = 1.4 * k; x.beginPath(); x.ellipse(ex, s * 0.52, 4 * k, 8 * k, 0, 0, 7); x.stroke(); }
+  // cheeks
+  for (const dx of [-0.085, 0.085]) {
+    const b = x.createRadialGradient(fx + dx * s, s * 0.585, 1, fx + dx * s, s * 0.585, 17 * k); b.addColorStop(0, 'rgba(255,120,105,0.32)'); b.addColorStop(1, 'rgba(255,120,105,0)');
+    x.fillStyle = b; x.fillRect(0, 0, s, s);
   }
-  x.fillStyle = 'rgba(150,80,50,0.28)'; x.beginPath(); x.ellipse(fx, s * 0.55, 3.5, 6, 0, 0, 7); x.fill();
-  x.strokeStyle = 'rgba(140,50,40,0.85)'; x.lineWidth = 2.2; x.beginPath(); x.arc(fx, s * 0.6, 7, 0.25, Math.PI - 0.25); x.stroke();
-});
+  // eyes
+  for (const dx of [-0.075, 0.075]) {
+    const ex = fx + dx * s, ey = s * 0.49;
+    x.fillStyle = 'rgba(120,60,40,0.20)'; x.beginPath(); x.ellipse(ex, ey - 1 * k, 10 * k, 8 * k, 0, 0, 7); x.fill();              // socket
+    x.strokeStyle = 'rgba(100,50,35,0.45)'; x.lineWidth = 1.6 * k; x.beginPath(); x.ellipse(ex, ey - 3 * k, 8.5 * k, 5.5 * k, 0, Math.PI * 1.1, Math.PI * 1.9); x.stroke();   // lid crease
+    x.fillStyle = '#211918'; x.beginPath(); x.ellipse(ex, ey, 4.2 * k, 5.4 * k, 0, 0, 7); x.fill();
+    x.fillStyle = 'rgba(255,255,255,0.95)'; x.beginPath(); x.arc(ex + 1.4 * k, ey - 1.8 * k, 1.3 * k, 0, 7); x.fill();
+    x.strokeStyle = 'rgba(25,18,16,0.85)'; x.lineWidth = 1.8 * k; x.beginPath(); x.arc(ex, ey - 0.5 * k, 5.6 * k, Math.PI * 1.08, Math.PI * 1.92); x.stroke();    // upper lashes
+    x.strokeStyle = 'rgba(60,38,24,0.88)'; x.lineWidth = 3 * k; x.lineCap = 'round'; x.beginPath(); x.moveTo(ex - 8 * k, ey - 13 * k); x.quadraticCurveTo(ex, ey - 17 * k, ex + 8 * k, ey - 12.5 * k); x.stroke();   // brow
+    h.fillStyle = '#4a4a4a'; h.beginPath(); h.ellipse(ex, ey, 9 * k, 7 * k, 0, 0, 7); h.fill();                                       // eye sockets sit in
+    h.strokeStyle = '#b0b0b0'; h.lineWidth = 3 * k; h.beginPath(); h.moveTo(ex - 8 * k, ey - 13 * k); h.quadraticCurveTo(ex, ey - 17 * k, ex + 8 * k, ey - 12.5 * k); h.stroke();   // brows stand out
+  }
+  // nose
+  x.fillStyle = 'rgba(140,70,45,0.22)'; x.beginPath(); x.ellipse(fx, s * 0.553, 5 * k, 9 * k, 0, 0, 7); x.fill();
+  x.fillStyle = 'rgba(95,40,28,0.5)'; for (const d of [-3.6, 3.6]) { x.beginPath(); x.ellipse(fx + d * k, s * 0.585, 1.9 * k, 1.3 * k, 0, 0, 7); x.fill(); }
+  h.fillStyle = '#c4c4c4'; h.beginPath(); h.ellipse(fx, s * 0.56, 5.5 * k, 10 * k, 0, 0, 7); h.fill();
+  // lips: a fuller lower lip, a darker line between, a faint smile
+  x.fillStyle = 'rgba(176,84,80,0.62)'; x.beginPath(); x.ellipse(fx, s * 0.612, 9 * k, 2.6 * k, 0, 0, 7); x.fill();
+  x.fillStyle = 'rgba(190,96,90,0.7)'; x.beginPath(); x.ellipse(fx, s * 0.628, 8 * k, 3.3 * k, 0, 0, 7); x.fill();
+  x.strokeStyle = 'rgba(100,38,36,0.8)'; x.lineWidth = 1.6 * k; x.lineCap = 'round'; x.beginPath(); x.moveTo(fx - 9 * k, s * 0.613); x.quadraticCurveTo(fx, s * 0.62, fx + 9 * k, s * 0.613); x.stroke();
+  h.fillStyle = '#b8b8b8'; h.beginPath(); h.ellipse(fx, s * 0.622, 9 * k, 5 * k, 0, 0, 7); h.fill();
+}, 512);
+
+// Fine sand: warm speckle with wind ripples, tiled across the whole desert (near white, so the dune colours show through).
+export const sandSkin = () => skin('sand', (x, h, s, r) => {
+  x.fillStyle = '#f3ead9'; x.fillRect(0, 0, s, s);
+  speck(x, s, r, 9000, '120,90,50', 0.16, 1.4); speck(x, s, r, 7000, '255,250,235', 0.3, 1.4);
+  for (let i = 0; i < 26; i++) {
+    const y0 = r() * s, amp = 3 + r() * 5, f = 0.012 + r() * 0.02, ph = r() * 6;
+    x.strokeStyle = `rgba(90,60,30,${0.05 + r() * 0.06})`; x.lineWidth = 1.5; x.beginPath();
+    h.strokeStyle = '#9a9a9a'; h.lineWidth = 3; h.beginPath();
+    for (let px = 0; px <= s; px += 8) { const py = y0 + Math.sin(px * f * 6.28 + ph) * amp; if (px) { x.lineTo(px, py); h.lineTo(px, py); } else { x.moveTo(px, py); h.moveTo(px, py); } }
+    x.stroke(); h.stroke();
+  }
+  speck(h, s, r, 3000, '255,255,255', 0.4, 1.2);
+}, 512);

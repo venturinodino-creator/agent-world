@@ -2,10 +2,12 @@
 // flat shapes read as solid), bloom on the glowing parts, a gentle tilt-shift blur towards the top and bottom of the
 // picture like a photographed miniature, and a final grade with a soft vignette.
 //
-// These cost real GPU time, so the pipeline keeps itself smooth: the occlusion and bloom run at half resolution, and in
-// automatic mode it steps down through cheaper levels (lower resolution, then no occlusion, then no effects) whenever
-// the frame rate falls under about 33 fps. The fx button in the header forces the full look on or turns it all off.
-// Browser only.
+// These cost real GPU time, so the pipeline works to stay smooth:
+//  - ambient occlusion only runs when the camera is close enough for it to be visible, and fades in as you zoom;
+//  - occlusion and bloom run at half resolution, and edges are smoothed with a cheap FXAA pass, not multisampling;
+//  - in automatic mode it first lowers the render resolution a step at a time whenever the frame rate drops under
+//    about 40 fps, and only when that is not enough does it drop occlusion, then every effect.
+// The fx button in the header forces the full look on or turns it all off. Browser only.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -13,6 +15,7 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 
 const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
 
@@ -50,39 +53,38 @@ const GRADE = {
     }`,
 };
 
-// Quality levels, best first: pixel ratio (as a share of the screen's, capped) and whether occlusion runs.
 const dpr = () => window.devicePixelRatio || 1;
-const LEVELS = [
-  { ratio: () => Math.min(dpr(), 1.25), ao: true },
-  { ratio: () => Math.min(dpr(), 1), ao: true },
-  { ratio: () => Math.min(dpr(), 1) * 0.85, ao: false },
-  { ratio: () => Math.min(dpr(), 1), ao: false, off: true },   // no effects at all
-];
-const PLAIN_RATIO = () => Math.min(dpr(), 1.5);
+const TOP_RATIO = () => Math.min(dpr(), 1.25);   // the sharpest the effects render
+const PLAIN_RATIO = () => Math.min(dpr(), 1.25); // with effects off
+const MIN_SCALE = 0.6, SCALE_STEP = 0.1;         // the resolution can drop to 60% of that, in tenths
+const AO_NEAR = 22, AO_FAR = 46;                 // camera distances: full occlusion inside, none beyond
+const SLOW_MS = 25;                              // slower than this for a couple of seconds (under 40 fps) steps quality down
+// Levels, best first, after the resolution has been used up: occlusion on, occlusion off, no effects.
+const LEVELS = [{ ao: true }, { ao: false }, { ao: false, off: true }];
 
 export function createPost(renderer, scene, camera, w, h, { on = true, auto = true, onAuto = () => {} } = {}) {
-  // multisampled, so edges stay smooth even though the picture goes through several passes
-  const target = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 2 });
+  const target = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType });
   const composer = new EffectComposer(renderer, target);
   composer.addPass(new RenderPass(scene, camera));
 
   const ao = new GTAOPass(scene, camera, w, h);
   ao.updateGtaoMaterial({ radius: 0.85, distanceExponent: 1.4, thickness: 1.4, scale: 1.35, samples: 8, distanceFallOff: 1, screenSpaceRadius: false });
   ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 5, rings: 2, samples: 8 });
-  ao.blendIntensity = 1.0;
-  // flat floating things (zzz, alert and work icons, contact-shadow discs, rings) would cast a square shadow of their
-  // own into the occlusion, so they sit out of that pass
+  // Flat floating things (zzz, icons, contact-shadow discs, rings) and the many small instanced figures and props
+  // would cost draw calls in the occlusion pass without changing it visibly, so they sit it out.
   const hide = ao.overrideVisibility.bind(ao);
-  ao.overrideVisibility = () => { hide(); scene.traverse(o => { if (o.isSprite || (o.material && o.material.transparent)) o.visible = false; }); };
+  ao.overrideVisibility = () => { hide(); scene.traverse(o => { if (o.isSprite || o.isInstancedMesh || (o.material && o.material.transparent)) o.visible = false; }); };
   composer.addPass(ao);
 
   const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.32, 0.55, 0.95);
   composer.addPass(bloom);
   const tilt = new ShaderPass(TILT); composer.addPass(tilt);
   composer.addPass(new OutputPass());
+  const fxaa = new ShaderPass(FXAAShader); composer.addPass(fxaa);
   composer.addPass(new ShaderPass(GRADE));
 
-  const st = { on, level: 0, w, h, last: 0, ema: 0, frames: 0 };
+  const st = { on, level: 0, scale: 1, w, h, last: 0, ema: 0, frames: 0 };
+  const off = () => !st.on || !!LEVELS[st.level].off;
   const layout = () => {
     const px = renderer.getPixelRatio();
     composer.setPixelRatio(px); composer.setSize(st.w, st.h);
@@ -90,27 +92,37 @@ export function createPost(renderer, scene, camera, w, h, { on = true, auto = tr
     ao.setSize(Math.round((st.w * px) / 2), Math.round((st.h * px) / 2));
     bloom.setSize(Math.round((st.w * px) / 2), Math.round((st.h * px) / 2));
     tilt.uniforms.resolution.value.set(st.w * px, st.h * px);
+    fxaa.material.uniforms.resolution.value.set(1 / (st.w * px), 1 / (st.h * px));
   };
   const apply = () => {
-    const lv = LEVELS[st.level];
-    renderer.setPixelRatio(st.on && !lv.off ? lv.ratio() : PLAIN_RATIO());
-    ao.enabled = lv.ao;
+    renderer.setPixelRatio(off() ? PLAIN_RATIO() : TOP_RATIO() * st.scale);
     layout();
   };
   apply();
 
   return {
-    get enabled() { return st.on && !LEVELS[st.level].off; },
-    setEnabled(v) { st.on = !!v; st.level = 0; st.frames = 0; st.ema = 0; apply(); },
+    get enabled() { return !off(); },
+    setEnabled(v) { st.on = !!v; st.level = 0; st.scale = 1; st.frames = 0; st.ema = 0; apply(); },
     setSize(nw, nh) { st.w = nw; st.h = nh; layout(); },
-    render() { if (st.on && !LEVELS[st.level].off) composer.render(); else renderer.render(scene, camera); },
-    // Called once per frame. In automatic mode, a couple of seconds under about 33 fps drops to the next cheaper
-    // level (never back up, so it cannot flicker between looks). Long gaps from a hidden tab are ignored.
+    // `distance` is how far the camera is from what it looks at; occlusion fades out as it grows.
+    render(distance = 0) {
+      if (off()) { renderer.render(scene, camera); return; }
+      const near = THREE.MathUtils.clamp((AO_FAR - distance) / (AO_FAR - AO_NEAR), 0, 1);
+      ao.enabled = LEVELS[st.level].ao && near > 0.04; ao.blendIntensity = near;
+      composer.render();
+    },
+    // Called once per frame. In automatic mode, a couple of seconds under SLOW_MS steps the quality down one notch:
+    // first the render resolution, then occlusion, then every effect. It never steps back up, so it cannot flicker
+    // between looks. Long gaps from a hidden tab are ignored.
     tick(now) {
       const dt = now - st.last; st.last = now;
       if (!st.on || !auto || dt > 400 || dt <= 0 || st.level >= LEVELS.length - 1) return;
       st.ema = st.ema ? st.ema * 0.94 + dt * 0.06 : dt; st.frames++;
-      if (st.frames > 90 && st.ema > 30) { st.level++; st.frames = 0; st.ema = 0; apply(); onAuto(st.level); }
+      if (st.frames <= 90 || st.ema <= SLOW_MS) return;
+      st.frames = 0; st.ema = 0;
+      if (st.scale > MIN_SCALE + 1e-6) st.scale = Math.max(MIN_SCALE, +(st.scale - SCALE_STEP).toFixed(2));
+      else { st.level++; st.scale = 1; onAuto(st.level); }
+      apply();
     },
   };
 }

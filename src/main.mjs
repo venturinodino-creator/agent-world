@@ -24,7 +24,7 @@ function setFeedOpen(open) {
 toggle.onclick = () => setFeedOpen(feedBox.classList.contains('collapsed'));
 try { if (localStorage.getItem('world.feedOpen') === '1') setFeedOpen(true); } catch { /* collapsed by default */ }
 const labels = $('#labels'), card = $('#card'), side = $('#side');
-const state = { data: null, world: null, selectedAgent: null, selectedIsland: null, hoverAgent: null, showDormant: false, expanded: new Set(), needsFit: true };
+const state = { builtAt: 0, data: null, world: null, selectedAgent: null, selectedIsland: null, hoverAgent: null, showDormant: false, expanded: new Set(), needsFit: true };
 const ui = { papers: [], errands: [], hubGlow: 0 };
 const bubbles = new Map();       // agent id -> { el, from, until }
 const islandLabels = new Map();  // island name -> element
@@ -133,7 +133,12 @@ async function refresh() {
     message(state.data ? 'Could not refresh the data, showing the last copy.' : 'Could not load the data, so the world is empty. Check your connection and reload.');
     return;
   }
-  message(''); state.data = data; rebuild();     // the replay clock keeps running; only the events it draws from are swapped
+  // The data only changes about once an hour, so most five-minute refreshes find the same snapshot. Rebuilding the
+  // whole 3D world for nothing costs a visible hitch, so it is only redone for new data or when the clock-based
+  // statuses (a committer counts as working for 30 minutes) may have moved on.
+  const same = state.data && data.generatedAt && data.generatedAt === state.data.generatedAt && Date.now() - state.builtAt < 15 * 60e3;
+  message(''); state.data = data;
+  if (!same) { rebuild(); state.builtAt = Date.now(); }     // the replay clock keeps running; only the events it draws from are swapped
 }
 
 // ----- overlays that follow things in the 3D view
