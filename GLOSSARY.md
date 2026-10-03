@@ -12,12 +12,8 @@ _Avoid_: Bot, job, thread (the side panel says "threads", but they are agents)
 An agent that is running a task right now. Its astronaut is seen at work: picking something up at its building, carrying it to the base in the middle of its hexagon, dropping it off and walking back, over and over.
 _Avoid_: Active, busy, live
 
-**On a timer**:
-An agent that runs by itself on a schedule (a workflow started by its cron, a Cowork task with a schedule). Between runs the world shows it jogging, awake, around its building.
-_Avoid_: Waiting, scheduled (that is the config value for an agent outside GitHub)
-
 **Asleep**:
-An agent that is not working, not failing and has no timer (Claude, the bot, the owner, a Cowork task that only runs on demand). Shown lying down at its building with a big "zzz" above its head.
+How the world shows every agent that is not working, whatever it is waiting for (its next scheduled run, a request, nothing at all), and also one whose last run failed, which keeps a flashing "!" as well. Lying down at its building with a big "zzz" above its head. There is nothing in between: an astronaut is either at work or asleep, and never wanders about.
 _Avoid_: Inactive, disabled, idle, waiting
 
 **Plumbing**:

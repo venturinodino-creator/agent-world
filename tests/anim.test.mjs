@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { pose, replayClock, due, errand, ERRAND_SECONDS, workCycle, workPeriod } from '../src/anim.mjs';
 
-const agent = (status, id = 'repo::agent', timer = false) => ({ id, status, kind: 'workflow', timer });
+const agent = (status, id = 'repo::agent') => ({ id, status, kind: 'workflow' });
 const times = Array.from({ length: 400 }, (_, i) => i * 0.25);
 
 test('a running agent stays at its desk and types', () => {
@@ -20,36 +20,19 @@ test('an asleep agent never moves and shows it is asleep', () => {
   }
 });
 
-test('a failing agent paces and flashes its alarm', () => {
-  const ps = times.map(t => pose(agent('fail'), t));
-  assert.ok(ps.every(p => p.alarm !== undefined && Math.abs(p.dx) <= 14));
-  assert.ok(Math.max(...ps.map(p => p.dx)) > 8 && Math.min(...ps.map(p => p.dx)) < -8, 'it paces both ways');
-  assert.ok(ps.some(p => p.alarm) && ps.some(p => !p.alarm), 'the alarm flashes');
-});
-
-test('an agent that is not working and has no timer is seen asleep and never moves', () => {
-  for (const status of ['ok', 'idle', 'asleep']) {
+test('an agent that is not working, however it ended, is seen asleep and never moves', () => {
+  for (const status of ['ok', 'idle', 'asleep', 'fail']) {
     for (const t of times) {
       const p = pose(agent(status), t);
-      assert.deepEqual([p.dx, p.dy, p.asleep, p.jogging, p.typing, p.alarm, p.walking], [0, 0, true, false, false, false, false], status);
+      assert.deepEqual([p.dx, p.dy, p.asleep, p.typing, p.walking], [0, 0, true, false, false], status);
     }
   }
 });
 
-test('an agent that runs on a timer and is not working right now jogs, awake', () => {
-  for (const status of ['ok', 'idle', 'asleep']) {
-    for (const t of times) {
-      const p = pose(agent(status, 'repo::agent', true), t);
-      assert.deepEqual([p.jogging, p.asleep, p.typing, p.alarm], [true, false, false, false], status);
-    }
-  }
-});
-
-test('a timer does not stop an agent working or failing: those states win', () => {
-  assert.equal(pose(agent('running', 'repo::agent', true), 1).typing, true);
-  assert.equal(pose(agent('running', 'repo::agent', true), 1).jogging, false);
-  assert.equal(pose(agent('fail', 'repo::agent', true), 1).walking, true);
-  assert.equal(pose(agent('fail', 'repo::agent', true), 1).jogging, false);
+test('a failing agent flashes its alarm while it lies there, and no other agent does', () => {
+  const ps = times.map(t => pose(agent('fail'), t));
+  assert.ok(ps.some(p => p.alarm) && ps.some(p => !p.alarm), 'the alarm flashes');
+  for (const status of ['ok', 'idle', 'asleep', 'running']) assert.ok(times.every(t => !pose(agent(status), t).alarm), status);
 });
 
 test('the same agent and time always give the same pose', () => {

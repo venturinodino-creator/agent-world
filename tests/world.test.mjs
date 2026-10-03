@@ -49,24 +49,6 @@ test('an island is sized for the agents that are left once plumbing is skipped',
   assert.equal(world([repo('a', { workflows: flows })], { localAgents: [], skipWorkflows: ['Smoke check', 'pages build and deployment'] }).islands[0].rings, 2);
 });
 
-test('a workflow that runs on a timer is flagged, one that only runs on a push or a pull request is not', () => {
-  const w = world([repo('a', { workflows: [
-    wf('Daily Scan'), wf('Also manual', { runs: [run({ event: 'workflow_dispatch' }), run({ event: 'schedule' })] }),
-    wf('On push', { event: 'push', runs: [run({ event: 'push' })] }), wf('On PR', { runs: [run({ event: 'pull_request' })] })] })]);
-  const timer = Object.fromEntries(w.agents.map(x => [x.name, x.timer]));
-  assert.deepEqual(timer, { 'Daily Scan': true, 'Also manual': true, 'On push': false, 'On PR': false });
-});
-
-test('builders and the owner have no timer, and a local agent has one unless it is on demand', () => {
-  const config = { localAgents: [
-    { name: 'Weekday', repo: 'a', schedule: 'Weekdays · Cowork', status: 'scheduled' },
-    { name: 'Asked', repo: 'a', schedule: 'On demand · Cowork', status: 'scheduled' },
-    { name: 'Nothing', repo: 'a', status: 'scheduled' }] };
-  const w = world([repo('a', { commits: [commit('claude', 30), commit('you', 30)] })], config);
-  const timer = Object.fromEntries(w.agents.map(x => [x.name, x.timer]));
-  assert.deepEqual(timer, { 'Claude · builder': false, You: false, Weekday: true, Asked: false, Nothing: false });
-});
-
 test('workflow status comes from its latest run', () => {
   const w = world([repo('a', { workflows: [
     wf('running', { status: 'in_progress', concl: null }), wf('failing', { concl: 'failure' }),
