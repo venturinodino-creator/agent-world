@@ -9,7 +9,7 @@ export function hash(id) {
   return (h >>> 0) / 4294967296;
 }
 
-const STILL = { dx: 0, dy: 0, typing: false, asleep: false, alarm: false, walking: false, facing: 1, frame: 0 };
+const STILL = { dx: 0, dy: 0, typing: false, asleep: false, jogging: false, alarm: false, walking: false, facing: 1, frame: 0 };
 const PACE_REACH = 12;
 
 // How an agent looks at time t (seconds): offset from its desk in world pixels, plus what it is doing.
@@ -23,8 +23,8 @@ export function pose(agent, t) {
       return { ...STILL, dx: Math.sin(a) * PACE_REACH, walking: true, facing: Math.cos(a) >= 0 ? 1 : -1,
         alarm: Math.floor((t + phase) * 3) % 2 === 0, frame: Math.floor(t * 6) % 2 };
     }
-    default:   // asleep, ok, idle: anything that is not working right now is seen asleep at its desk
-      return { ...STILL, asleep: true, frame: Math.floor(t * 0.8) % 3 };
+    default:   // asleep, ok, idle: an agent on a timer jogs, awake, between its runs; one with no timer is seen asleep at its desk
+      return agent.timer ? { ...STILL, jogging: true, frame: Math.floor(t * 8) % 2 } : { ...STILL, asleep: true, frame: Math.floor(t * 0.8) % 3 };
   }
 }
 

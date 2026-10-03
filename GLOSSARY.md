@@ -12,13 +12,13 @@ _Avoid_: Bot, job, thread (the side panel says "threads", but they are agents)
 An agent that is running a task right now.
 _Avoid_: Active, busy, live
 
-**Waiting**:
-An agent whose last run finished successfully and which is idle until its next scheduled run. Shown asleep.
-_Avoid_: Idle, done
+**On a timer**:
+An agent that runs by itself on a schedule (a workflow started by its cron, a Cowork task with a schedule). Between runs the world shows it jogging, awake, around its building.
+_Avoid_: Waiting, scheduled (that is the config value for an agent outside GitHub)
 
 **Asleep**:
-How the world shows every agent that is not working and not failing: slumped at its building with a big "zzz". That covers waiting agents and agents that only run on a schedule or on demand outside GitHub (a Cowork task), whose runs the world cannot see.
-_Avoid_: Inactive, disabled
+An agent that is not working, not failing and has no timer (Claude, the bot, the owner, a Cowork task that only runs on demand). Shown lying down at its building with a big "zzz" above its head.
+_Avoid_: Inactive, disabled, idle, waiting
 
 **Plumbing**:
 A workflow that builds or checks a repo (a Pages deploy, a smoke check, CI) and does no job of its own. Listed in `skipWorkflows` in `src/config.mjs`; it gets no building and no astronaut.

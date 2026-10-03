@@ -36,7 +36,8 @@ function agentsOf(r, localAgents, now, skip) {
   for (const w of [...r.workflows].sort(byName)) {
     if (skip.has(w.name.toLowerCase())) continue;   // plumbing (builds, checks), not an agent that does a job
     const runs = w.runs && w.runs.length ? w.runs : [w];
-    out.push({ id: `${r.name}::${w.name}`, name: w.name, kind: 'workflow', status: runStatus(w), repo: r.name, url: w.url,
+    // on a timer: at least one of its recent runs was started by its schedule
+    out.push({ id: `${r.name}::${w.name}`, name: w.name, kind: 'workflow', status: runStatus(w), timer: runs.some(x => x.event === 'schedule'), repo: r.name, url: w.url,
       details: { latest: runDetail(runs[0]), recent: runs.slice(0, RECENT).map(runDetail) } });
   }
   const people = [['claude', 'Claude · builder', 'builder'], ['bot', 'Auto-commit bot', 'builder'], ['you', 'You', 'human']];
@@ -44,14 +45,14 @@ function agentsOf(r, localAgents, now, skip) {
     const mine = r.commits.filter(c => c.who === who).sort((a, b) => ms(b.date) - ms(a.date));
     if (!mine.length) continue;
     const recent = mine.slice(0, RECENT).map(c => ({ text: c.msg, date: c.date, url: c.url, sha: c.sha }));
-    out.push({ id: `${r.name}::${name}`, name, kind, status: now - ms(mine[0].date) < RUNNING_WINDOW ? 'running' : 'ok',
+    out.push({ id: `${r.name}::${name}`, name, kind, status: now - ms(mine[0].date) < RUNNING_WINDOW ? 'running' : 'ok', timer: false,
       repo: r.name, url: r.url, details: { latest: recent[0], recent, count: mine.length } });
   }
   for (const a of localAgents) out.push(localAgent(a, r.name, r.name));
   return out;
 }
 
-const localAgent = (a, repo, islandName) => ({ id: `${islandName}::${a.name}`, name: a.name, kind: 'local', status: LOCAL_STATUS[a.status] || 'asleep',
+const localAgent = (a, repo, islandName) => ({ id: `${islandName}::${a.name}`, name: a.name, kind: 'local', status: LOCAL_STATUS[a.status] || 'asleep', timer: !!a.schedule && !/on demand/i.test(a.schedule),
   repo, url: null, details: { schedule: a.schedule || '', role: a.role || '', note: LOCAL_NOTE, startUrl: a.startUrl || '' } });
 
 // ----- hexagon islands

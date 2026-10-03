@@ -206,7 +206,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       const halo = a.status === 'running' ? new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.09, 8, 40), new THREE.MeshBasicMaterial({ color: 0x7fe9ff, transparent: true })) : null;
       if (halo) { halo.rotation.x = Math.PI / 2; root.add(halo); }
       const dx = a.pos.x - isl.x, dz = a.pos.z - isl.z, len = Math.hypot(dx, dz) || 1;
-      const alarm = a.status === 'fail' ? symbolSprite('!', '#ff5a4a') : null, zs = a.status === 'running' || a.status === 'fail' ? [] : [sleepSprite()];   // every agent that is not working right now (waiting for its next run, idle, scheduled) is seen asleep, with a big zzz
+      const alarm = a.status === 'fail' ? symbolSprite('!', '#ff5a4a') : null, zs = a.status === 'running' || a.status === 'fail' || a.timer ? [] : [sleepSprite()];   // an agent that is not working and has no timer is lying asleep, with a big zzz; one on a timer jogs
       const icon = a.status === 'running' ? iconProto.clone() : null; icon?.scale.set(1.15, 1.15, 1);
       [alarm, icon, ...zs].filter(Boolean).forEach(s => root.add(s));
       root.add(building, robot); S.pickables.push(building, robot);
@@ -281,6 +281,11 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       const er = errandFor(ui.errands, a.id, t);
       let rx = r.bx + p.dx * WALK_UNITS, rz = r.bz, yaw = p.walking ? (p.facing > 0 ? Math.PI / 2 : -Math.PI / 2) : 0, y = 0.14 + (p.typing ? Math.abs(Math.sin(t * 10 + r.ph * 6)) * 0.3 : p.asleep ? -0.1 : Math.sin(t * 2 + r.ph * 6) * 0.012);
       let walking = p.walking;
+      if (p.jogging && !er) {   // on a timer: jogs a small circle around its spot
+        const ja = t * 1.7 + r.ph * 6.3;
+        rx = r.bx + Math.cos(ja) * 1.15; rz = r.bz + Math.sin(ja) * 1.15; yaw = Math.atan2(-Math.sin(ja), Math.cos(ja));
+        y = 0.14 + Math.abs(Math.sin(t * 7.5 + r.ph * 5)) * 0.35; walking = true;
+      }
       if (er) {                      // an errand: carry a crate to the headquarters, drop it off, come back
         rx = r.bx + (r.hq.x - r.bx) * er.u; rz = r.bz + (r.hq.z - r.bz) * er.u;
         const back = !er.carrying && !er.depositing, k = back ? -1 : 1;
@@ -290,13 +295,15 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
         if (er.depositing) { const hq = S.hqs.get(a.island); if (hq) hq.last = t; }
       }
       r.carry.visible = !!er?.carrying;
-      r.robot.position.set(rx, y, rz);
+      // asleep: lying on its side, helmet towards the camera, centred on its spot and a little smaller so it stays inside its tile;
+      // working: leaning into the job with the arms hammering; on a timer: jogging; failing or on an errand: walking
+      const lying = p.asleep && !er, sc = lying ? ASTRO * 0.85 : ASTRO, tilt = lying ? 1.45 : 0;
+      r.robot.scale.setScalar(sc);
+      r.robot.position.set(rx + (lying ? Math.sin(tilt) * 0.36 * sc : 0), lying ? 0.14 + 0.14 * sc + Math.sin(t * 1.4 + r.ph * 6) * 0.02 : y, rz);
       r.robot.rotation.y = yaw;
-      // asleep: slumped forward with the arms hanging; working: leaning into the job with the arms hammering; failing or on an errand: walking
-      const slump = p.asleep && !er;
-      r.robot.rotation.x = slump ? 0.6 + Math.sin(t * 1.4 + r.ph * 6) * 0.04 : p.typing && !er ? 0.18 + Math.sin(t * 10 + r.ph * 6) * 0.06 : 0;
-      r.robot.rotation.z = slump ? 0.22 : er && walking ? Math.sin(t * 9 + r.ph * 5) * 0.1 : 0;
-      r.robot.userData.arms.forEach((arm, i) => { arm.rotation.x = slump ? 0.5 : p.typing && !er ? -0.9 + Math.sin(t * 14 + i * Math.PI) * 0.7 : walking ? Math.sin(t * 9 + i * Math.PI) * 0.6 : 0; });
+      r.robot.rotation.x = p.typing && !er ? 0.18 + Math.sin(t * 10 + r.ph * 6) * 0.06 : p.jogging && !er ? 0.3 : 0;
+      r.robot.rotation.z = lying ? tilt + Math.sin(t * 1.4 + r.ph * 6) * 0.02 : er && walking ? Math.sin(t * 9 + r.ph * 5) * 0.1 : 0;
+      r.robot.userData.arms.forEach((arm, i) => { arm.rotation.x = lying ? 0.25 : p.typing && !er ? -0.9 + Math.sin(t * 14 + i * Math.PI) * 0.7 : p.jogging && !er ? Math.sin(t * 13 + i * Math.PI) * 1.1 : walking ? Math.sin(t * 9 + i * Math.PI) * 0.6 : 0; });
       r.robot.userData.body.emissive.setHex(p.alarm ? 0xff2244 : 0x000000);
       r.robot.userData.body.emissiveIntensity = p.alarm ? 0.7 : 0;
       const pulse = a.status === 'running' ? 0.6 + 0.5 * Math.sin(t * 6 + r.ph * 6) : a.status === 'fail' ? (p.alarm ? 1.4 : 0.3) : 0;
@@ -305,7 +312,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       if (r.alarm) r.alarm.position.set(rx, 5.4 + Math.sin(t * 6) * 0.04, rz);
       if (r.icon) r.icon.position.set(rx, 5.9 + Math.sin(t * 3 + r.ph * 6) * 0.08, rz);
       // the zzz hovers over the head and follows it when the agent strolls; lower when it is lying down
-      r.zs.forEach(z => { z.position.set(rx + 0.9, (p.asleep ? 5.0 : 5.4) + Math.sin(t * 1.6 + r.ph * 6) * 0.12, rz + 0.8); z.material.opacity = 0.88 + Math.sin(t * 2.4 + r.ph * 6) * 0.12; });
+      r.zs.forEach(z => { z.visible = !er; z.position.set(rx - 0.9, 3.5 + Math.sin(t * 1.6 + r.ph * 6) * 0.12, rz + 0.3); z.material.opacity = 0.88 + Math.sin(t * 2.4 + r.ph * 6) * 0.12; });
       if (r.halo) {   // a pulsing ring on the ground shows who is working right now
         const k = (t * 1.2 + r.ph) % 1; r.halo.position.set(rx, 0.2, rz); r.halo.scale.setScalar(0.8 + k * 0.9); r.halo.material.opacity = 0.9 * (1 - k);
       }
