@@ -5,7 +5,7 @@ import { THREE, STATUS, HEALTH, PALETTE, buildPod, buildRobot, buildingFor, buil
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { panelSkin, solarSkin, crateSkin, fabricSkin, visorSkin } from './textures.mjs';
-import { skyDome, planets, moonGround } from './space.mjs';
+import { skyDome, planets, alienGround, alienProps } from './space.mjs';
 import { createPost } from './post.mjs';
 import { addBlob, blobGeometry, blobMaterial } from './grounding.mjs';
 import { tileOffsets } from './world.mjs';
@@ -13,7 +13,7 @@ import { pose, hash, errand, routeBot } from './anim.mjs';
 
 const WALK_UNITS = 0.5 / 14;          // pose offsets are in old pixel units; this turns them into tiles
 const RESULT_HEX = { ok: 0x41e08a, fail: 0xff5d6c, running: 0x3fd7e8 };
-const FOG = 0x05070e;   // space: distance fades to black, where the stars take over
+const FOG = 0x2a1844;   // the planet's haze: distance fades into deep violet
 
 // Island floor colours by health: dark slate normally, royal blue while something is working (as in the reference).
 const FLOOR = {
@@ -62,7 +62,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(FOG); scene.fog = new THREE.FogExp2(FOG, 0.0026);
+  scene.background = new THREE.Color(FOG); scene.fog = new THREE.FogExp2(FOG, 0.0030);
   scene.add(skyDome(), planets());
   const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 3200);
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -70,15 +70,15 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
 
   // a soft studio environment gives the metal, glass and plastic something to reflect, so they read as real materials
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.2;
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.22;
   // Lighting with contrast is what makes shapes look solid: a strong warm sun, a cool sky fill and a faint
   // back-light that rims every figure. The darker shadow side is what the ambient occlusion pass then deepens.
-  scene.add(new THREE.HemisphereLight(0x8ea4d6, 0x45464f, 0.5));
-  const sun = new THREE.DirectionalLight(0xfff6ea, 3.9);
+  scene.add(new THREE.HemisphereLight(0xb08cff, 0x3a2850, 0.55));
+  const sun = new THREE.DirectionalLight(0xfff0e0, 3.7);
   const shadowSize = Math.min(2048, renderer.capabilities.maxTextureSize);
   renderer.shadowMap.autoUpdate = false;   // redrawn every other frame in update(): shadows barely move between frames
   sun.castShadow = true; sun.shadow.mapSize.set(shadowSize, shadowSize); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.025; sun.shadow.radius = 3;
-  const rim = new THREE.DirectionalLight(0x6a8cff, 1.2); rim.position.set(-30, 18, -40);
+  const rim = new THREE.DirectionalLight(0x4ad8ff, 1.4); rim.position.set(-30, 18, -40);
   scene.add(sun, sun.target, rim);
 
   const S = { world: null, root: new THREE.Group(), agents: new Map(), pickables: [], rocks: [], hub: null, focus: null, papers: new Map(),
@@ -108,7 +108,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     // frame the world inside the part of the view the side panel does not cover
     const vf = camera.fov * Math.PI / 180, visible = Math.max(0.4, (S.size.w - (S.inset || 0)) / S.size.h), hf = 2 * Math.atan(Math.tan(vf / 2) * visible);
     const dist = (R * 1.05) / Math.tan(Math.min(vf, hf) / 2);
-    return { target: centre.clone(), position: centre.clone().add(new THREE.Vector3(0, 0.62, 0.78).normalize().multiplyScalar(dist)) };
+    return { target: centre.clone(), position: centre.clone().add(new THREE.Vector3(0, 0.5, 0.87).normalize().multiplyScalar(dist)) };
   };
   const glide = (target, position, seconds = 0.9) => {
     S.focus = { t0: performance.now(), dur: seconds * 1000, fromT: controls.target.clone(), fromP: camera.position.clone(), toT: target, toP: position };
@@ -232,7 +232,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
   function setWorld(world, { refit = false } = {}) {
     clear(); S.world = world;
     const R = world.bounds.radius, root = S.root;
-    root.add(moonGround(R));
+    root.add(alienGround(R), alienProps(R));
     // each island: a coral-sided slate platform with a square-tile floor and a bright health-coloured rim
     const addPlate = (isl, floor, rimHex, rimK) => {
       const tex = floorTexture(floor).clone(); tex.needsUpdate = true;
@@ -293,7 +293,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
     // drifting dark rocks above the world
     const rnd = lcg(7);
     for (let i = 0; i < 16; i++) {
-      const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5 + rnd() * 1.2, 0), new THREE.MeshStandardMaterial({ color: 0x6e6e76, roughness: 0.95, flatShading: true }));
+      const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5 + rnd() * 1.2, 0), new THREE.MeshStandardMaterial({ color: 0x5a4678, roughness: 0.95, flatShading: true }));
       const a = rnd() * Math.PI * 2, d = R * (1.1 + rnd() * 0.9), y = 1 + rnd() * 10;
       rock.position.set(Math.cos(a) * d, y, Math.sin(a) * d); rock.castShadow = true; rock.userData = { y, ph: rnd() * 6, spin: 0.1 + rnd() * 0.3 };
       root.add(rock); S.rocks.push(rock);

@@ -172,23 +172,6 @@ export const visorSkin = () => skin('visor', (x, h, s, r, t) => {
   x.fillStyle = rim; x.fillRect(0, 0, s, t);
 }, 384, 256);
 
-// Lunar ground: grey dust and grit with scattered craters (a dark floor, a lit rim), tiled across the whole surface. Near
-// white and neutral, so the vertex colours of the terrain tint it.
-export const regolithSkin = () => skin('regolith', (x, h, s, r) => {
-  x.fillStyle = '#d9d9de'; x.fillRect(0, 0, s, s);
-  for (let i = 0; i < 40; i++) { x.fillStyle = `rgba(${r() < 0.5 ? '255,255,255' : '60,60,70'},${0.04 + r() * 0.07})`; x.beginPath(); x.arc(r() * s, r() * s, (10 + r() * 40), 0, 7); x.fill(); }
-  speck(x, s, r, 9000, '40,40,50', 0.2, 1.6); speck(x, s, r, 6000, '255,255,255', 0.35, 1.6);
-  for (let i = 0; i < 26; i++) {
-    const cx = r() * s, cy = r() * s, rad = 6 + r() * 26;
-    const g = x.createRadialGradient(cx, cy, rad * 0.2, cx, cy, rad); g.addColorStop(0, 'rgba(40,40,50,0.42)'); g.addColorStop(0.8, 'rgba(40,40,50,0.18)'); g.addColorStop(1, 'rgba(40,40,50,0)');
-    x.fillStyle = g; x.beginPath(); x.arc(cx, cy, rad, 0, 7); x.fill();
-    x.strokeStyle = 'rgba(255,255,255,0.4)'; x.lineWidth = 2; x.beginPath(); x.arc(cx, cy, rad * 0.95, Math.PI * 1.1, Math.PI * 1.9); x.stroke();
-    h.fillStyle = '#4a4a4a'; h.beginPath(); h.arc(cx, cy, rad * 0.8, 0, 7); h.fill();
-    h.strokeStyle = '#c0c0c0'; h.lineWidth = 3; h.beginPath(); h.arc(cx, cy, rad * 0.95, 0, 7); h.stroke();
-  }
-  speck(h, s, r, 4000, '255,255,255', 0.4, 1.4);
-}, 512);
-
 // The glass of a habitat dome: a clear blue tint with a geodesic frame (triangles) of white struts. Mostly transparent.
 export const glassSkin = () => skin('glass', (x, h, s, r) => {
   x.clearRect(0, 0, s, s);
@@ -232,6 +215,13 @@ export const planetMap = (kind = 'earth') => {
     }
     for (let i = 0; i < 90; i++) { x.fillStyle = `rgba(255,255,255,${0.18 + r() * 0.3})`; x.beginPath(); x.ellipse(r() * w, r() * hgt, 20 + r() * 70, 5 + r() * 16, (r() - 0.5) * 0.8, 0, 7); x.fill(); }
     x.fillStyle = 'rgba(240,248,255,0.9)'; x.fillRect(0, 0, w, 22); x.fillRect(0, hgt - 22, w, 22);
+  } else if (kind === 'gas') {
+    const bands = ['#e9c58a', '#c9854a', '#8a4a3a', '#f2dcb0', '#6b3a52', '#d89a5c', '#f6e6c4', '#9a5a46'];
+    let y = 0;
+    while (y < hgt) { const bh = 14 + r() * 38; x.fillStyle = bands[Math.floor(r() * bands.length)]; x.fillRect(0, y, w, bh + 2); y += bh; }
+    for (let i = 0; i < 420; i++) { x.fillStyle = `rgba(${r() < 0.5 ? '255,235,200' : '90,40,40'},${0.05 + r() * 0.1})`; x.beginPath(); x.ellipse(r() * w, r() * hgt, 30 + r() * 120, 2 + r() * 7, 0, 0, 7); x.fill(); }
+    x.fillStyle = '#b8402e'; x.beginPath(); x.ellipse(w * 0.62, hgt * 0.62, 70, 36, 0, 0, 7); x.fill();
+    x.strokeStyle = 'rgba(255,230,190,0.6)'; x.lineWidth = 4; x.beginPath(); x.ellipse(w * 0.62, hgt * 0.62, 84, 46, 0, 0, 7); x.stroke();
   } else {
     x.fillStyle = '#8d8d94'; x.fillRect(0, 0, w, hgt);
     for (let i = 0; i < 180; i++) { const cx = r() * w, cy = r() * hgt, rad = 4 + r() * 26; const g = x.createRadialGradient(cx, cy, 1, cx, cy, rad); g.addColorStop(0, 'rgba(40,40,48,0.5)'); g.addColorStop(1, 'rgba(40,40,48,0)'); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, rad, 0, 7); x.fill(); }
@@ -239,5 +229,58 @@ export const planetMap = (kind = 'earth') => {
   }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.userData.keep = true;
   cache.set(key, { map: t });
+  return t;
+};
+
+// Alien ground, near white so the terrain's vertex colours (violet, magenta, rust, teal) show through: fine grit, scattered
+// pebbles and faint layers of rock, with a bump map to match. Tiled across the whole surface.
+export const alienSkin = () => skin('alien', (x, h, s, r) => {
+  x.fillStyle = '#e8e2ee'; x.fillRect(0, 0, s, s);
+  for (let i = 0; i < 36; i++) { x.fillStyle = `rgba(${r() < 0.5 ? '255,255,255' : '70,50,90'},${0.04 + r() * 0.08})`; x.beginPath(); x.arc(r() * s, r() * s, 12 + r() * 46, 0, 7); x.fill(); }
+  for (let i = 0; i < 14; i++) { const y0 = r() * s; x.strokeStyle = `rgba(60,40,80,${0.05 + r() * 0.07})`; x.lineWidth = 2 + r() * 3; x.beginPath(); x.moveTo(0, y0); x.bezierCurveTo(s * 0.3, y0 + (r() - 0.5) * 30, s * 0.7, y0 + (r() - 0.5) * 30, s, y0 + (r() - 0.5) * 20); x.stroke(); }
+  speck(x, s, r, 8000, '50,30,70', 0.2, 1.6); speck(x, s, r, 5000, '255,255,255', 0.35, 1.6);
+  for (let i = 0; i < 170; i++) {
+    const px = r() * s, py = r() * s, rad = 2 + r() * 7;
+    x.fillStyle = 'rgba(40,25,60,0.35)'; x.beginPath(); x.ellipse(px + 1, py + 2, rad, rad * 0.7, 0, 0, 7); x.fill();
+    x.fillStyle = `rgba(255,250,255,${0.25 + r() * 0.3})`; x.beginPath(); x.ellipse(px, py, rad, rad * 0.7, 0, 0, 7); x.fill();
+    h.fillStyle = '#d0d0d0'; h.beginPath(); h.ellipse(px, py, rad, rad * 0.7, 0, 0, 7); h.fill();
+  }
+  speck(h, s, r, 3500, '255,255,255', 0.4, 1.4);
+}, 512);
+
+// Glowing cracks for the ground's emissive map: black with branching cyan fissures. Plain texture (not a skin), tiled.
+export const veinsMap = () => {
+  if (cache.has('veins')) return cache.get('veins').map;
+  const sz = 512, c = document.createElement('canvas'); c.width = c.height = sz;
+  const x = c.getContext('2d'), r = lcg(91);
+  x.fillStyle = '#000'; x.fillRect(0, 0, sz, sz);
+  x.lineCap = 'round'; x.shadowColor = '#35e6ff'; x.shadowBlur = 9;
+  const crack = (px, py, ang, len, w) => {
+    x.strokeStyle = `rgba(80,235,255,${0.6 + r() * 0.4})`; x.lineWidth = w; x.beginPath(); x.moveTo(px, py);
+    for (let i = 0; i < len; i++) {
+      ang += (r() - 0.5) * 0.7; px += Math.cos(ang) * 9; py += Math.sin(ang) * 9; x.lineTo(px, py);
+      if (r() < 0.06 && w > 1.1) { x.stroke(); crack(px, py, ang + (r() < 0.5 ? 1 : -1) * (0.5 + r() * 0.7), Math.floor(len * 0.5), w * 0.65); x.beginPath(); x.moveTo(px, py); }
+    }
+    x.stroke();
+  };
+  for (let i = 0; i < 6; i++) crack(70 + r() * 370, 70 + r() * 370, r() * 6.28, 20 + Math.floor(r() * 14), 2.6);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; t.userData.keep = true;
+  cache.set('veins', { map: t });
+  return t;
+};
+
+// The gas giant's ring: concentric bands of dusty tan fading in and out, drawn so the ring's outer edge touches the canvas.
+export const ringMap = () => {
+  if (cache.has('ring')) return cache.get('ring').map;
+  const sz = 1024, c = document.createElement('canvas'); c.width = c.height = sz;
+  const x = c.getContext('2d'), r = lcg(55), mid = sz / 2;
+  x.clearRect(0, 0, sz, sz);
+  for (let rad = mid * 0.62; rad < mid; rad += 1.5) {
+    const edge = Math.min(1, (rad - mid * 0.62) / 22, (mid - rad) / 22), gap = Math.sin(rad * 0.09) * Math.sin(rad * 0.023) > 0.7 ? 0.15 : 1;
+    x.strokeStyle = `rgba(${210 + Math.floor(r() * 30)},${175 + Math.floor(r() * 30)},${130 + Math.floor(r() * 30)},${edge * gap * (0.35 + r() * 0.5)})`;
+    x.lineWidth = 2; x.beginPath(); x.arc(mid, mid, rad, 0, Math.PI * 2); x.stroke();
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.userData.keep = true;
+  cache.set('ring', { map: t });
   return t;
 };

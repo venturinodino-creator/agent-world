@@ -11,7 +11,7 @@ header{display:flex;align-items:center;gap:10px;padding:7px 14px;background:var(
 .btn:hover{border-color:var(--cyan);color:var(--cyan)}
 .banner{margin:8px 14px 0;padding:8px 12px;border:1px solid #6b5a1c;background:#2a2410;color:var(--amber);border-radius:8px}
 
-.stage{position:relative;flex:1;min-height:0;overflow:hidden;background:linear-gradient(#4f8fe0,#a9c9ee 45%,#f6dfc4 62%,#dcaa6e)}
+.stage{position:relative;flex:1;min-height:0;overflow:hidden;background:linear-gradient(#0a0720,#2a1844 55%,#5a2f66)}
 .stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;outline:none;touch-action:none}
 .labels{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:2}
 

@@ -48,7 +48,7 @@ const GRADE = {
       float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
       c.rgb = mix(vec3(l), c.rgb, 1.14);
       c.rgb = (c.rgb - 0.5) * 1.07 + 0.5;
-      c.rgb *= vec3(1.02, 1.0, 0.97);
+      c.rgb *= vec3(1.0, 1.0, 1.03);
       gl_FragColor = c;
     }`,
 };
