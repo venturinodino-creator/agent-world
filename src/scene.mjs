@@ -4,7 +4,7 @@
 import { THREE, STATUS, HEALTH, PALETTE, buildPod, buildRobot, buildingFor, buildHub, symbolSprite, workingIcon, sleepSprite, bakeStatics } from './models.mjs';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { panelSkin, solarSkin, crateSkin, fabricSkin, faceSkin, sandSkin } from './textures.mjs';
+import { panelSkin, solarSkin, crateSkin, fabricSkin, visorSkin, sandSkin } from './textures.mjs';
 import { createPost } from './post.mjs';
 import { addBlob, blobGeometry, blobMaterial } from './grounding.mjs';
 import { tileOffsets } from './world.mjs';
@@ -222,37 +222,39 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       for (let k = 0; k < 3; k++) route(isl, a.pos.x + (rnd() - 0.5) * 0.4, a.pos.z + 0.7, 0.2 + rnd() * 0.08, rnd() * 2);
     }
     if (!list.length) return;
-    // Each worker is dressed from a few stable picks (own random stream, so the routes above stay the same):
-    // skin tone, trousers, backpack, plus boots, belt, hard-hat brim, reflective vest stripe and hands.
-    const SKIN = [0xffd9b0, 0xeab98d, 0xc98f62, 0x9a6540, 0x6e4228], PANTS = [0x2e3550, 0x4a4036, 0x3a4a5a, 0x575a63, 0x3c3f2e], PACK = [0x4d5a3a, 0x8a5a2b, 0x394560, 0xb04a2e];
+    // The crew are small astronauts: white suits, round helmets with dark glass visors, ear pods and backpacks, and a stripe
+    // in their own colour at the chest. Each gets a slightly different height (own random stream, so the routes stay the same).
     const dress = lcg(41);
-    list.forEach(b => { b.skin = SKIN[Math.floor(dress() * SKIN.length)]; b.pants = PANTS[Math.floor(dress() * PANTS.length)]; b.pack = PACK[Math.floor(dress() * PACK.length)]; b.scale = 0.94 + dress() * 0.14; });
-    const N = list.length, cloth = fabricSkin(), crateTex = crateSkin(0xf4f1ec), face = faceSkin();
+    list.forEach(b => { b.scale = 0.94 + dress() * 0.14; });
+    const N = list.length, cloth = fabricSkin(), crateTex = crateSkin(0xf4f1ec), glass = visorSkin();
     const mat = (extra = {}) => new THREE.MeshStandardMaterial({ roughness: 0.5, ...extra });
     const fabric = (rough = 0.8) => mat({ roughness: rough, map: cloth.map, bumpMap: cloth.bumpMap, bumpScale: 0.6 });
     const parts = {
-      body: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.085, 0.17, 2, 8), fabric(), N),
-      head: new THREE.InstancedMesh(new THREE.SphereGeometry(0.122, 10, 7), mat({ roughness: 0.55, map: face.map, bumpMap: face.bumpMap, bumpScale: 0.3 }), N),
-      hat: new THREE.InstancedMesh(new THREE.SphereGeometry(0.134, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2), mat({ roughness: 0.25, metalness: 0.1 }), N),
-      brim: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.155, 0.155, 0.012, 8), mat({ roughness: 0.25, metalness: 0.1 }), N),
-      legs: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.034, 0.03, 0.24, 5), fabric(), N * 2),
-      boots: new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.05, 0.11), mat({ roughness: 0.65, color: 0x2a211c }), N * 2),
-      arms: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.03, 0.12, 1, 5), fabric(), N * 2),
-      hands: new THREE.InstancedMesh(new THREE.SphereGeometry(0.034, 5, 4), mat({ roughness: 0.55 }), N * 2),
-      belt: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.089, 0.089, 0.03, 8), mat({ roughness: 0.6, color: 0x3a2e26 }), N),
-      stripe: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.0885, 0.0885, 0.026, 8), mat({ roughness: 0.25, metalness: 0.35, color: 0xdfe6f0, emissive: 0x28303a }), N),
-      pack: new THREE.InstancedMesh(new THREE.BoxGeometry(0.13, 0.17, 0.065), fabric(0.85), N),
+      body: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.09, 0.17, 2, 8), fabric(), N),
+      helmet: new THREE.InstancedMesh(new THREE.SphereGeometry(0.15, 10, 8), mat({ roughness: 0.22, metalness: 0.08 }), N),
+      visor: new THREE.InstancedMesh(new THREE.SphereGeometry(0.153, 10, 6, Math.PI / 2 - 0.95, 1.9, Math.PI / 2 - 0.78, 1.3),
+        mat({ roughness: 0.1, metalness: 0.5, map: glass.map, emissiveMap: glass.map, emissive: 0xffffff, emissiveIntensity: 0.35 }), N),
+      ears: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.04, 0.04, 0.06, 6).rotateZ(Math.PI / 2), fabric(), N * 2),
+      legs: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.04, 0.036, 0.24, 6), fabric(), N * 2),
+      boots: new THREE.InstancedMesh(new THREE.BoxGeometry(0.075, 0.06, 0.12), mat({ roughness: 0.6 }), N * 2),
+      arms: new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.034, 0.12, 1, 5), fabric(), N * 2),
+      hands: new THREE.InstancedMesh(new THREE.SphereGeometry(0.04, 5, 4), fabric(0.7), N * 2),
+      belt: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.096, 0.096, 0.03, 8), mat({ roughness: 0.5 }), N),
+      stripe: new THREE.InstancedMesh(new THREE.CylinderGeometry(0.0955, 0.0955, 0.03, 8), mat({ roughness: 0.4, metalness: 0.15 }), N),
+      pack: new THREE.InstancedMesh(new THREE.BoxGeometry(0.14, 0.18, 0.08), fabric(0.85), N),
       crate: new THREE.InstancedMesh(new THREE.BoxGeometry(0.25, 0.25, 0.25), mat({ roughness: 0.7, map: crateTex.map, bumpMap: crateTex.bumpMap, bumpScale: 1.2 }), N),
       blob: new THREE.InstancedMesh(blobGeometry(0.17), blobMaterial(0.5), N),   // contact shadow under each worker
     };
     parts.blob.renderOrder = 1;
-    const c = new THREE.Color();
+    const c = new THREE.Color(), WHITE = 0xf3f5f9;
     list.forEach((b, i) => {
-      parts.body.setColorAt(i, c.setHex(b.vest)); parts.hat.setColorAt(i, c.setHex(b.hat)); parts.brim.setColorAt(i, c.setHex(b.hat)); parts.crate.setColorAt(i, c.setHex(b.crate));
-      parts.head.setColorAt(i, c.setHex(b.skin)); parts.pack.setColorAt(i, c.setHex(b.pack));
-      parts.arms.setColorAt(i * 2, c.setHex(b.vest)); parts.arms.setColorAt(i * 2 + 1, c.setHex(b.vest));
-      parts.legs.setColorAt(i * 2, c.setHex(b.pants)); parts.legs.setColorAt(i * 2 + 1, c.setHex(b.pants));
-      parts.hands.setColorAt(i * 2, c.setHex(b.skin)); parts.hands.setColorAt(i * 2 + 1, c.setHex(b.skin));
+      parts.body.setColorAt(i, c.setHex(WHITE)); parts.helmet.setColorAt(i, c.setHex(0xffffff)); parts.visor.setColorAt(i, c.setHex(0xffffff));
+      parts.pack.setColorAt(i, c.setHex(0xe4e9f0)); parts.belt.setColorAt(i, c.setHex(0x8b94a3)); parts.stripe.setColorAt(i, c.setHex(b.vest));
+      parts.crate.setColorAt(i, c.setHex(b.crate));
+      for (const k of [0, 1]) {
+        parts.ears.setColorAt(i * 2 + k, c.setHex(0xcfd6e0)); parts.arms.setColorAt(i * 2 + k, c.setHex(WHITE)); parts.hands.setColorAt(i * 2 + k, c.setHex(0xdfe4ec));
+        parts.legs.setColorAt(i * 2 + k, c.setHex(0xeef1f6)); parts.boots.setColorAt(i * 2 + k, c.setHex(0xdde2ea));
+      }
     });
     // only the body and crate cast shadows; the many thin parts would just cost frames
     Object.entries(parts).forEach(([name, im]) => { im.castShadow = name === 'body' || name === 'crate'; S.root.add(im); });
@@ -305,7 +307,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
       const robot = buildRobot(a.kind, a.name); robot.position.set(a.pos.x, 0.14, a.pos.z + 0.7);
       robot.scale.setScalar(1.5); robot.userData.agentId = a.id; addBlob(robot, 0.2, 0.05, 0.55);
       const carry = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({ color: PALETTE.red, roughness: 0.45 }));
-      carry.position.set(0, 0.8, 0); carry.visible = false; robot.add(carry);
+      carry.position.set(0, 1.0, 0); carry.visible = false; robot.add(carry);
       const sparks = a.status === 'running' ? Array.from({ length: 6 }, () => { const sp = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), new THREE.MeshBasicMaterial({ color: 0xfff1a8 })); root.add(sp); return sp; }) : [];
       const halo = a.status === 'running' ? new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.04, 8, 32), new THREE.MeshBasicMaterial({ color: 0x7fe9ff, transparent: true })) : null;
       if (halo) { halo.rotation.x = Math.PI / 2; root.add(halo); }
@@ -446,21 +448,22 @@ export function createScene(container, { fx = null, onFxAuto = () => {} } = {}) 
         const swing = Math.sin(gait) * 0.7, lean = w.carrying ? -0.12 : 0;
         put(parts.blob, i, 0, 0.055, 0, 0, 0);
         put(parts.body, i, 0, 0.38, 0, lean, 0);
-        put(parts.head, i, 0, 0.64, 0, 0, 0);
-        put(parts.hat, i, 0, 0.665, 0, 0, 0);
-        put(parts.brim, i, 0, 0.677, 0.014, 0, 0);
+        put(parts.helmet, i, 0, 0.66, 0, 0, 0);
+        put(parts.visor, i, 0, 0.66, 0, 0, 0);
+        put(parts.ears, i * 2, -0.155, 0.66, 0, 0, 0);
+        put(parts.ears, i * 2 + 1, 0.155, 0.66, 0, 0, 0);
         put(parts.legs, i * 2, -0.05, 0.25, 0, swing, -0.12);
         put(parts.legs, i * 2 + 1, 0.05, 0.25, 0, -swing, -0.12);
-        put(parts.boots, i * 2, -0.05, 0.25, 0, swing, -0.25);                       // boots follow the legs
-        put(parts.boots, i * 2 + 1, 0.05, 0.25, 0, -swing, -0.25);
-        put(parts.belt, i, 0, 0.33, 0, 0, 0);
+        put(parts.boots, i * 2, -0.05, 0.25, 0, swing, -0.22);                       // boots follow the legs
+        put(parts.boots, i * 2 + 1, 0.05, 0.25, 0, -swing, -0.22);
+        put(parts.belt, i, 0, 0.31, 0, 0, 0);
         put(parts.stripe, i, 0, 0.42, 0, lean, 0);
-        put(parts.pack, i, 0, 0.42, -0.105, lean, 0);
+        put(parts.pack, i, 0, 0.42, -0.115, lean, 0);
         const carry = w.carrying;       // arms hold the crate out in front, otherwise swing
-        put(parts.arms, i * 2, -0.13, 0.46, 0, carry ? -1.2 : -swing, -0.07);
-        put(parts.arms, i * 2 + 1, 0.13, 0.46, 0, carry ? -1.2 : swing, -0.07);
-        put(parts.hands, i * 2, -0.13, 0.46, 0, carry ? -1.2 : -swing, -0.165);
-        put(parts.hands, i * 2 + 1, 0.13, 0.46, 0, carry ? -1.2 : swing, -0.165);
+        put(parts.arms, i * 2, -0.135, 0.47, 0, carry ? -1.2 : -swing, -0.07);
+        put(parts.arms, i * 2 + 1, 0.135, 0.47, 0, carry ? -1.2 : swing, -0.07);
+        put(parts.hands, i * 2, -0.135, 0.47, 0, carry ? -1.2 : -swing, -0.165);
+        put(parts.hands, i * 2 + 1, 0.135, 0.47, 0, carry ? -1.2 : swing, -0.165);
         put(parts.crate, i, 0, 0.5, 0.19, 0, 0, carry ? one : hide);
         if (w.forward && w.u > 0.93) { const hq = S.hqs.get(b.isl); if (hq) hq.last = t; }
       });

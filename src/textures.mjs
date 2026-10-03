@@ -8,12 +8,12 @@ const css = hex => '#' + hex.toString(16).padStart(6, '0');
 const cache = new Map();
 
 // Draws a colour canvas and a grey height canvas (mid-grey is flat, darker is cut in, lighter is raised).
-function skin(key, draw, size = 256) {
+function skin(key, draw, size = 256, tall = size) {
   if (cache.has(key)) return cache.get(key);
-  const mk = () => { const c = document.createElement('canvas'); c.width = c.height = size; return c; };
+  const mk = () => { const c = document.createElement('canvas'); c.width = size; c.height = tall; return c; };
   const cc = mk(), hc = mk(), x = cc.getContext('2d'), h = hc.getContext('2d');
-  h.fillStyle = '#808080'; h.fillRect(0, 0, size, size);
-  draw(x, h, size, lcg(key.length * 977 + size));
+  h.fillStyle = '#808080'; h.fillRect(0, 0, size, tall);
+  draw(x, h, size, lcg(key.length * 977 + size), tall);
   const map = new THREE.CanvasTexture(cc), bumpMap = new THREE.CanvasTexture(hc);
   map.colorSpace = THREE.SRGBColorSpace;
   for (const t of [map, bumpMap]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; t.userData.keep = true; }
@@ -155,57 +155,6 @@ export const fabricSkin = () => skin('fabric', (x, h, s, r) => {
   }
 });
 
-// A face wrapped on the head sphere, centred on the front (u = 0.25), drawn at 512 so it holds up when you zoom in:
-// skin variation and pores, shaded cheeks and jaw, eyes with lids and a catchlight, brows, nose, lips, ears and
-// hair at the back. The base is white so the instance colour sets the skin tone.
-export const faceSkin = () => skin('face', (x, h, s, r) => {
-  const k = s / 256, fx = s * 0.25;
-  x.fillStyle = '#ffffff'; x.fillRect(0, 0, s, s);
-  // skin: soft blotches and pores
-  for (let i = 0; i < 70; i++) { x.fillStyle = `rgba(${r() < 0.5 ? '200,110,80' : '255,235,220'},${0.03 + r() * 0.05})`; x.beginPath(); x.arc(r() * s, r() * s, (6 + r() * 22) * k, 0, 7); x.fill(); }
-  speck(x, s, r, 3500, '90,45,30', 0.07, 1.2 * k);
-  // shading: darker at the temples and under the jaw, so the face reads as round
-  const jaw = x.createRadialGradient(fx, s * 0.72, 2 * k, fx, s * 0.72, 58 * k); jaw.addColorStop(0, 'rgba(120,60,35,0.16)'); jaw.addColorStop(1, 'rgba(120,60,35,0)');
-  x.fillStyle = jaw; x.fillRect(0, 0, s, s);
-  for (const side of [-1, 1]) {
-    const t = x.createRadialGradient(fx + side * 52 * k, s * 0.44, 2 * k, fx + side * 52 * k, s * 0.44, 30 * k); t.addColorStop(0, 'rgba(120,60,35,0.10)'); t.addColorStop(1, 'rgba(120,60,35,0)');
-    x.fillStyle = t; x.fillRect(0, 0, s, s);
-  }
-  // hair at the back and nape, with strands
-  x.fillStyle = 'rgba(64,40,26,0.96)';
-  x.beginPath(); x.ellipse(s * 0.75, s * 0.4, s * 0.3, s * 0.34, 0, 0, 7); x.fill();
-  x.fillRect(s * 0.52, 0, s * 0.46, s * 0.46);
-  x.lineWidth = 1.2 * k;
-  for (let i = 0; i < 160; i++) { x.strokeStyle = `rgba(${r() < 0.5 ? '25,15,10' : '110,75,48'},0.4)`; const px = s * (0.5 + r() * 0.48), py = r() * s * 0.5; x.beginPath(); x.moveTo(px, py); x.lineTo(px + (r() - 0.5) * 6 * k, py + 10 * k + r() * 14 * k); x.stroke(); }
-  for (const ex of [0, s * 0.5, s]) { x.fillStyle = 'rgba(150,80,50,0.38)'; x.beginPath(); x.ellipse(ex, s * 0.52, 7 * k, 12 * k, 0, 0, 7); x.fill(); x.strokeStyle = 'rgba(110,50,30,0.35)'; x.lineWidth = 1.4 * k; x.beginPath(); x.ellipse(ex, s * 0.52, 4 * k, 8 * k, 0, 0, 7); x.stroke(); }
-  // cheeks
-  for (const dx of [-0.085, 0.085]) {
-    const b = x.createRadialGradient(fx + dx * s, s * 0.585, 1, fx + dx * s, s * 0.585, 17 * k); b.addColorStop(0, 'rgba(255,120,105,0.32)'); b.addColorStop(1, 'rgba(255,120,105,0)');
-    x.fillStyle = b; x.fillRect(0, 0, s, s);
-  }
-  // eyes
-  for (const dx of [-0.075, 0.075]) {
-    const ex = fx + dx * s, ey = s * 0.49;
-    x.fillStyle = 'rgba(120,60,40,0.20)'; x.beginPath(); x.ellipse(ex, ey - 1 * k, 10 * k, 8 * k, 0, 0, 7); x.fill();              // socket
-    x.strokeStyle = 'rgba(100,50,35,0.45)'; x.lineWidth = 1.6 * k; x.beginPath(); x.ellipse(ex, ey - 3 * k, 8.5 * k, 5.5 * k, 0, Math.PI * 1.1, Math.PI * 1.9); x.stroke();   // lid crease
-    x.fillStyle = '#211918'; x.beginPath(); x.ellipse(ex, ey, 4.2 * k, 5.4 * k, 0, 0, 7); x.fill();
-    x.fillStyle = 'rgba(255,255,255,0.95)'; x.beginPath(); x.arc(ex + 1.4 * k, ey - 1.8 * k, 1.3 * k, 0, 7); x.fill();
-    x.strokeStyle = 'rgba(25,18,16,0.85)'; x.lineWidth = 1.8 * k; x.beginPath(); x.arc(ex, ey - 0.5 * k, 5.6 * k, Math.PI * 1.08, Math.PI * 1.92); x.stroke();    // upper lashes
-    x.strokeStyle = 'rgba(60,38,24,0.88)'; x.lineWidth = 3 * k; x.lineCap = 'round'; x.beginPath(); x.moveTo(ex - 8 * k, ey - 13 * k); x.quadraticCurveTo(ex, ey - 17 * k, ex + 8 * k, ey - 12.5 * k); x.stroke();   // brow
-    h.fillStyle = '#4a4a4a'; h.beginPath(); h.ellipse(ex, ey, 9 * k, 7 * k, 0, 0, 7); h.fill();                                       // eye sockets sit in
-    h.strokeStyle = '#b0b0b0'; h.lineWidth = 3 * k; h.beginPath(); h.moveTo(ex - 8 * k, ey - 13 * k); h.quadraticCurveTo(ex, ey - 17 * k, ex + 8 * k, ey - 12.5 * k); h.stroke();   // brows stand out
-  }
-  // nose
-  x.fillStyle = 'rgba(140,70,45,0.22)'; x.beginPath(); x.ellipse(fx, s * 0.553, 5 * k, 9 * k, 0, 0, 7); x.fill();
-  x.fillStyle = 'rgba(95,40,28,0.5)'; for (const d of [-3.6, 3.6]) { x.beginPath(); x.ellipse(fx + d * k, s * 0.585, 1.9 * k, 1.3 * k, 0, 0, 7); x.fill(); }
-  h.fillStyle = '#c4c4c4'; h.beginPath(); h.ellipse(fx, s * 0.56, 5.5 * k, 10 * k, 0, 0, 7); h.fill();
-  // lips: a fuller lower lip, a darker line between, a faint smile
-  x.fillStyle = 'rgba(176,84,80,0.62)'; x.beginPath(); x.ellipse(fx, s * 0.612, 9 * k, 2.6 * k, 0, 0, 7); x.fill();
-  x.fillStyle = 'rgba(190,96,90,0.7)'; x.beginPath(); x.ellipse(fx, s * 0.628, 8 * k, 3.3 * k, 0, 0, 7); x.fill();
-  x.strokeStyle = 'rgba(100,38,36,0.8)'; x.lineWidth = 1.6 * k; x.lineCap = 'round'; x.beginPath(); x.moveTo(fx - 9 * k, s * 0.613); x.quadraticCurveTo(fx, s * 0.62, fx + 9 * k, s * 0.613); x.stroke();
-  h.fillStyle = '#b8b8b8'; h.beginPath(); h.ellipse(fx, s * 0.622, 9 * k, 5 * k, 0, 0, 7); h.fill();
-}, 512);
-
 // Fine sand: warm speckle with wind ripples, tiled across the whole desert (near white, so the dune colours show through).
 export const sandSkin = () => skin('sand', (x, h, s, r) => {
   x.fillStyle = '#f3ead9'; x.fillRect(0, 0, s, s);
@@ -219,3 +168,20 @@ export const sandSkin = () => skin('sand', (x, h, s, r) => {
   }
   speck(h, s, r, 3000, '255,255,255', 0.4, 1.2);
 }, 512);
+
+// An astronaut's visor: near-black glass with a faint blue sheen, a few stars reflected in it, a bright glint high on one
+// side and a darker edge. It is painted on a cap of the helmet sphere, so the middle of the picture faces forward.
+export const visorSkin = () => skin('visor', (x, h, s, r, t) => {
+  const k = s / 384;
+  const glass = x.createLinearGradient(0, 0, s, t); glass.addColorStop(0, '#04060c'); glass.addColorStop(0.55, '#0c1428'); glass.addColorStop(1, '#16223d');
+  x.fillStyle = glass; x.fillRect(0, 0, s, t);
+  for (let i = 0; i < 60; i++) { x.fillStyle = `rgba(255,255,255,${0.15 + r() * 0.5})`; x.fillRect(r() * s, r() * t, (1 + r()) * k, (1 + r()) * k); }
+  // a soft curved reflection of a bright sky across the upper half
+  const sky = x.createLinearGradient(0, 0, 0, t * 0.6); sky.addColorStop(0, 'rgba(120,170,255,0.22)'); sky.addColorStop(1, 'rgba(120,170,255,0)');
+  x.fillStyle = sky; x.beginPath(); x.ellipse(s / 2, t * 0.1, s * 0.46, t * 0.5, 0, 0, 7); x.fill();
+  const glint = x.createRadialGradient(s * 0.76, t * 0.24, 1, s * 0.76, t * 0.24, 40 * k); glint.addColorStop(0, 'rgba(255,255,255,0.95)'); glint.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = glint; x.beginPath(); x.ellipse(s * 0.76, t * 0.24, 42 * k, 28 * k, -0.5, 0, 7); x.fill();
+  x.strokeStyle = 'rgba(255,255,255,0.2)'; x.lineWidth = 6 * k; x.beginPath(); x.arc(s / 2, t * 0.55, 150 * k, Math.PI * 1.15, Math.PI * 1.45); x.stroke();
+  const rim = x.createRadialGradient(s / 2, t / 2, t * 0.3, s / 2, t / 2, s * 0.62); rim.addColorStop(0, 'rgba(0,0,0,0)'); rim.addColorStop(1, 'rgba(0,0,0,0.6)');
+  x.fillStyle = rim; x.fillRect(0, 0, s, t);
+}, 384, 256);
