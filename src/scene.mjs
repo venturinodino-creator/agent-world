@@ -9,7 +9,7 @@ import { scatterDecor } from './decor.mjs';
 import { baseFor } from './bases.mjs';
 import { createPost } from './post.mjs';
 import { addBlob } from './grounding.mjs';
-import { tileOffsets, TILE } from './world.mjs';
+import { tileOffsets, TILE, crowdLook } from './world.mjs';
 import { pose, hash, errand, workCycle } from './anim.mjs';
 
 const WALK_UNITS = 0.5 / 14;          // pose offsets are in old pixel units; this turns them into tiles
@@ -212,10 +212,10 @@ export function createScene(container, { fx = null, onFxAuto = () => {}, onConte
 
     for (const a of world.agents) {
       const isl = world.islands.find(i => i.name === a.island), ph = hash(a.id);
-      const k = isl.scale ?? 1, front = FRONT * k, astro = ASTRO * (0.8 + 0.2 * k);   // a crowded island: smaller, flatter buildings and the astronaut right in front
-      const building = buildingFor(a, a.status, ph, k < 0.9); building.position.set(a.pos.x, 0.14, a.pos.z);
+      const k = isl.scale, look = crowdLook(k), front = FRONT * look.front, astro = ASTRO * look.astro;   // a crowded island: smaller, flatter buildings and the astronaut right in front
+      const building = buildingFor(a, a.status, ph, look.low); building.position.set(a.pos.x, 0.14, a.pos.z);
       building.rotation.y = Math.floor(ph * 8) * (Math.PI / 4);
-      building.scale.set(BUILD * k, BUILD * k * (k < 0.9 ? 0.8 : 1), BUILD * k);   // chunky, like the reference; flatter on a crowded island so it hides nobody
+      building.scale.set(BUILD * k, BUILD * k * look.flat, BUILD * k);   // chunky, like the reference; flatter on a crowded island so it hides nobody
       building.userData.agentId = a.id; addBlob(building, 0.72, 0.05, 0.55);
       const robot = buildRobot(a.kind, a.name); robot.position.set(a.pos.x, 0.14, a.pos.z + front);
       robot.scale.setScalar(astro); robot.rotation.order = 'YXZ'; robot.userData.agentId = a.id; addBlob(robot, 0.2, 0.05, 0.55);
@@ -229,7 +229,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {}, onConte
       const icon = a.status === 'running' ? iconProto.clone() : null; icon?.scale.set(1.15, 1.15, 1);
       [alarm, icon, ...zs].filter(Boolean).forEach(s => root.add(s));
       root.add(building, robot); S.pickables.push(building, robot);
-      S.agents.set(a.id, { agent: a, building, robot, carry, sparks, halo, bx: a.pos.x, bz: a.pos.z + front, front, astro, ph, alarm, icon, zs, island: isl,
+      S.agents.set(a.id, { agent: a, building, robot, carry, sparks, halo, bx: a.pos.x, bz: a.pos.z + front, front, astro, k, ph, alarm, icon, zs, island: isl,
         hq: { x: isl.x + (dx / len) * 5.6, z: isl.z + (dz / len) * 5.6 } });
     }
 
@@ -334,7 +334,8 @@ export function createScene(container, { fx = null, onFxAuto = () => {}, onConte
       }
       r.sparks.forEach((sp, i) => {   // a working agent throws sparks off its building
         const u = (t * 1.6 + i / 6 + r.ph) % 1, ang = i * 1.1 + r.ph * 6;
-        sp.position.set(r.bx + Math.cos(ang) * 1.3 * u, 2.2 + u * 2.6, r.bz - r.front + Math.sin(ang) * 1.3 * u); sp.scale.setScalar(Math.max(0.01, 1 - u));
+        const sk = 0.5 + 0.5 * r.k;   // the sparks stay over the smaller roofs of a crowded island
+        sp.position.set(r.bx + Math.cos(ang) * 1.3 * u * sk, (2.2 + u * 2.6) * sk, r.bz - r.front + Math.sin(ang) * 1.3 * u * sk); sp.scale.setScalar(Math.max(0.01, 1 - u));
       });
     }
 

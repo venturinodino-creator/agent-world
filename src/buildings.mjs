@@ -166,7 +166,7 @@ function buildHabPod(status) {
 const HULL_PROFILE = [[0.0, 0.1], [0.12, 0.1], [0.16, 0.16], [0.175, 0.3], [0.17, 0.55], [0.155, 0.78], [0.12, 0.95], [0.07, 1.07], [0.0, 1.14]];
 // A taller rocket (`ext` model units longer) stretches the straight middle of the hull and moves everything above it up.
 const profileFor = ext => HULL_PROFILE.map(([r, y]) => [r, y > 0.5 ? y + ext : y]);
-const hullRadius = (y, P = HULL_PROFILE) => { for (let i = 1; i < P.length; i++) { const [r0, y0] = P[i - 1], [r1, y1] = P[i]; if (y <= y1) return r0 + ((r1 - r0) * (y - y0)) / (y1 - y0); } return 0; };
+const hullRadius = (y, P) => { for (let i = 1; i < P.length; i++) { const [r0, y0] = P[i - 1], [r1, y1] = P[i]; if (y <= y1) return r0 + ((r1 - r0) * (y - y0)) / (y1 - y0); } return 0; };
 function rocketParts(g, { band, ring, pad = true, detail = false, legs = true, ext = 0 }) {
   const put = adder(g), rim = steel(), gold = orangeM(), P = profileFor(ext), hr = y => hullRadius(y, P), up = y => (y > 0.5 ? y + ext : y);
   put(new THREE.LatheGeometry(P.map(([r, y]) => new THREE.Vector2(r, y)), 24), hull(), 0, 0, 0);
@@ -304,7 +304,7 @@ export function buildHub() {
     const a = (k * Math.PI) / 2 + Math.PI / 4 + 0.5, x = Math.sin(a) * 2.35, z = Math.cos(a) * 2.35;
     put(C(0.03, 0.04, 1.0, 6), steel(), x, 1.55, z); put(B(0.26, 0.1, 0.16), ring, x, 2.1, z, [0, a, 0]);
   }
-  for (const a of [Math.PI * 0.62, Math.PI * 1.38]) {
+  for (const a of [Math.PI * 0.62, Math.PI * 1.25]) {
     const x = Math.sin(a) * 2.5, z = Math.cos(a) * 2.5;
     put(new THREE.SphereGeometry(0.34, 14, 10), hull(), x, 1.05, z); put(new THREE.TorusGeometry(0.345, 0.018, 5, 24), blueM(), x, 1.05, z, [Math.PI / 2, 0, 0]);
     put(C(0.2, 0.26, 0.16, 12), steel(), x, 0.78, z); g.add(strut([x, 1.0, z], [Math.sin(a) * 1.5, 1.2, Math.cos(a) * 1.5], 0.03, steel()));

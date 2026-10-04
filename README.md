@@ -35,7 +35,7 @@ involved, its astronaut wakes, carries a crate to the base (which lights up) and
 hub, and the activity feed lists it. Browsers pause animation in background tabs; it resumes when you switch back.
 
 Plumbing workflows (Pages deploys, smoke checks, CI) are not agents and are left out: see `skipWorkflows` in
-`src/config.mjs`. A crowded island keeps only low things on its free tiles so the astronauts stay in view.
+`src/config.mjs`. A crowded island is drawn with smaller, flatter, low-profile buildings (down to half size), keeps its free tiles bare, and its astronauts stand right in front of their building, so the agents stay in view.
 
 ## Cowork / local agents
 

@@ -75,8 +75,12 @@ const tileXZ = ([q, r]) => {
 export const tileOffsets = rings => spiral(1 + 3 * rings * (rings + 1)).map(tileXZ);
 const ringsFor = agents => { let rings = 1; while (1 + 3 * rings * (rings + 1) < agents + 1) rings++; return rings; };
 const islandRadius = rings => TILE * SQRT3 * rings + 1.5 + PUSH;
+const CROWD_SPOTS = 18;   // agents an island holds comfortably at full size (two rings), whatever size the busiest island makes them all
 // The fuller an island, the smaller its buildings are drawn (down to half size), so the astronauts in front of them stay in view.
 export const crowdScale = (agents, spots) => Math.round(Math.min(1, Math.max(0.5, 1 - ((agents / Math.max(1, spots) - 0.4) / 0.55) * 0.5)) * 1000) / 1000;
+// How a crowded island is drawn for its scale: low-profile buildings that are also flattened, astronauts a little smaller
+// than on a roomy island and standing right in front of their building.
+export const crowdLook = (scale = 1) => ({ low: scale < 0.9, flat: scale < 0.9 ? 0.8 : 1, astro: 0.8 + 0.2 * scale, front: scale });
 
 function healthOf(agents) {
   if (agents.some(a => a.status === 'fail')) return 'fail';
@@ -117,7 +121,7 @@ export function buildWorld(data, config = {}, now = Date.now(), opts = {}) {
   }
   // live islands all take the size of the busiest one, so the honeycomb is even
   const rings = Math.max(1, ...islands.filter(i => !i.dormant).map(i => i.rings));
-  islands.filter(i => !i.dormant).forEach(i => { i.rings = rings; i.radius = round(islandRadius(rings)); i.scale = crowdScale(i.agentCount, 3 * rings * (rings + 1)); });
+  islands.filter(i => !i.dormant).forEach(i => { i.rings = rings; i.radius = round(islandRadius(rings)); i.scale = crowdScale(i.agentCount, CROWD_SPOTS); });
 
   const { hub, placed } = layout(islands);
   islands.forEach((isl, i) => { isl.x = placed[i].x; isl.z = placed[i].z; isl.design = i % DESIGNS; });

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildWorld, tileOffsets, TILE, PUSH, DESIGNS, crowdScale } from '../src/world.mjs';
+import { buildWorld, tileOffsets, TILE, PUSH, DESIGNS, crowdScale, crowdLook } from '../src/world.mjs';
 
 const NOW = Date.parse('2026-10-02T12:00:00Z');
 const iso = hoursAgo => new Date(NOW - hoursAgo * 3600e3).toISOString();
@@ -66,6 +66,23 @@ test('the fuller an island is, the smaller its buildings are drawn, so the astro
   assert.ok(levels.every((v, i) => i === 0 || v <= levels[i - 1]), 'never grows as it fills: ' + levels);
   assert.ok(levels.at(-1) >= 0.5 && levels.at(-1) <= 0.55, 'a full island keeps buildings of half size: ' + levels.at(-1));
   assert.ok(crowdScale(17, 18) < 0.7 && crowdScale(12, 18) > 0.75 && crowdScale(12, 18) < 1);
+});
+
+test('how crowded an island looks depends on its own agents, not on how big the other repos are', () => {
+  const busy = Array.from({ length: 17 }, (_, i) => wf('Scan ' + String(i).padStart(2, '0')));
+  const huge = Array.from({ length: 30 }, (_, i) => wf('Job ' + String(i).padStart(2, '0')));
+  const alone = world([repo('busy', { workflows: busy })]).islands[0].scale;
+  const beside = world([repo('busy', { workflows: busy }), repo('huge', { workflows: huge })]).islands.find(i => i.name === 'busy').scale;
+  assert.equal(beside, alone);
+  assert.ok(alone < 0.6);
+});
+
+test('a crowded island is drawn with low, flat buildings and its astronauts right in front of them', () => {
+  assert.deepEqual(crowdLook(1), { low: false, flat: 1, astro: 1, front: 1 });
+  assert.deepEqual(crowdLook(0.5), { low: true, flat: 0.8, astro: 0.9, front: 0.5 });
+  assert.equal(crowdLook(0.9).low, false);
+  assert.equal(crowdLook(0.89).low, true);
+  assert.deepEqual(crowdLook(), crowdLook(1));
 });
 
 test('an island carries the scale for how crowded it is', () => {
