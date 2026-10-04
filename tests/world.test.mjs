@@ -62,6 +62,7 @@ test('every island has its own design, so neighbouring plates never look alike, 
 test('the fuller an island is, the smaller its buildings are drawn, so the astronauts in front stay in view', () => {
   assert.equal(crowdScale(0, 18), 1);
   assert.equal(crowdScale(7, 18), 1, 'a roomy island keeps full size');
+  assert.ok(crowdScale(8, 18) < 1 && crowdScale(8, 18) > 0.9, 'shrinking starts gently at 8 of 18');
   const levels = [7, 9, 11, 13, 15, 17, 18].map(n => crowdScale(n, 18));
   assert.ok(levels.every((v, i) => i === 0 || v <= levels[i - 1]), 'never grows as it fills: ' + levels);
   assert.ok(levels.at(-1) >= 0.5 && levels.at(-1) <= 0.55, 'a full island keeps buildings of half size: ' + levels.at(-1));

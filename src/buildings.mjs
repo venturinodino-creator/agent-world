@@ -316,8 +316,10 @@ export function buildHub() {
 // Variety between neighbouring buildings comes from a stable number per agent (0..1). Workflows are one of nine habitats,
 // Claude is a rocket, the auto-commit bot a rover, you a cabin with a flag, and Cowork agents are dishes.
 const HABITATS = [buildHabDome, buildHabTube, buildBarrel, buildSilo, buildGreenhouse, buildStorage, buildHangar, buildWaterTower, buildHabPod];
-const LOW_HABITATS = [buildHabDome, buildHabTube, buildBarrel, buildGreenhouse, buildStorage, buildHabPod];   // no tall silo, water tower or wide hangar on a crowded island
-const habitat = (status, pick, low) => { const pool = low ? LOW_HABITATS : HABITATS; return pool[Math.floor(pick * pool.length) % pool.length](status); };
+// On a crowded island the tall silo, the wide hangar and the water tower are swapped for low ones, so when an island fills up
+// only those three kinds change and every other building stays as it was.
+const LOW_SWAP = new Map([[buildSilo, buildHabDome], [buildHangar, buildHabTube], [buildWaterTower, buildBarrel]]);
+const habitat = (status, pick, low) => { const make = HABITATS[Math.floor(pick * HABITATS.length) % HABITATS.length]; return (low ? LOW_SWAP.get(make) || make : make)(status); };
 export const buildingFor = (agent, status, pick = 0, low = false) =>
   agent.kind === 'workflow' ? habitat(status, pick, low)
   : agent.kind === 'human' ? buildCabin(status)
