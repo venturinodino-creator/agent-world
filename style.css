@@ -137,9 +137,11 @@ button.tile{cursor:pointer} button.tile:hover{border-color:var(--red)}
 
 @media (max-width:820px){.side{display:none}.feed{display:none}.card{width:calc(100% - 24px)}}
 
-/* Activate (shown only to the signed-in Admin) */
+/* The Work button (the real start is for the signed-in Admin only) */
 .open.run{border:0;cursor:pointer;font:inherit;font-weight:700;color:#fff}
 .open.run:disabled{opacity:.6;cursor:default}
+.open.alt{flex:none;background:var(--panel2);border:1px solid var(--line2);color:var(--txt)}
+.hint{margin:6px 12px 0;color:var(--dim);font-size:12px}
 .open.run.pending{background:var(--panel2);border:1px solid var(--cyan);color:var(--cyan);animation:pulse 1.4s ease-in-out infinite alternate}
 @keyframes pulse{from{opacity:.55}to{opacity:1}}
 .confirm{margin:6px 12px 0;padding:10px 12px;border:1px solid var(--line2);border-radius:10px;background:var(--panel2)}

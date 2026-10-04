@@ -49,6 +49,12 @@ export function renderPanel(root, agent, onClose, now = Date.now(), actions = {}
     const wait = el('button', 'open run pending', offer.label); wait.type = 'button'; wait.disabled = true; buttons.append(wait);
   } else if (offer?.kind === 'cowork') {
     buttons.append(link('↗ ' + offer.label, offer.url, 'open'));
+  } else if (offer?.kind === 'signin') {
+    const work = el('button', 'open run', '▶ ' + offer.label); work.type = 'button'; work.onclick = () => act.onSignIn?.(); buttons.append(work);
+    if (url) buttons.append(link('↗ Open', url, 'open alt'));
+  } else if (offer?.kind === 'manual') {
+    const work = el('button', 'open run', '▶ ' + offer.label); work.type = 'button'; work.disabled = true; buttons.append(work);
+    if (url) buttons.append(link('↗ Open', url, 'open alt'));
   } else if (url) buttons.append(link('↗ Open', url, 'open'));
   const focus = el('button', 'ghost', '⌖ Focus'); focus.type = 'button'; focus.onclick = () => actions.focus?.();
   buttons.append(focus);
@@ -58,6 +64,7 @@ export function renderPanel(root, agent, onClose, now = Date.now(), actions = {}
     yes.type = no.type = 'button'; yes.onclick = () => act.onStart?.(); no.onclick = () => act.onCancel?.();
     const row = el('div', 'row'); row.append(yes, no); box.append(el('p', '', offer.confirm), row); extras.push(box);
   }
+  if (offer?.note) extras.push(el('p', 'hint', offer.note));
   if (act?.error) extras.push(el('p', 'activateerr', act.error));
   if (act?.runUrl && safeUrl(act.runUrl)) { const p = el('p', 'runlink'); p.append(link('View this run on GitHub ↗', act.runUrl)); extras.push(p); }
 

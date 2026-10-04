@@ -107,6 +107,7 @@ function activationFor(agent) {
     error: act.error?.id === agent.id ? act.error.message : '',
     onAsk: () => { act.confirming = agent.id; act.error = null; refreshUi(); },
     onCancel: () => { act.confirming = null; refreshUi(); },
+    onSignIn: () => { location.hash = '#admin'; },   // the sign-in form opens; once signed in the same card offers the real Work button
     onStart: async () => {
       act.confirming = null; act.busy = agent.id; act.error = null; refreshUi();
       const res = await reqs.start(agent);

@@ -33,9 +33,9 @@ Which of the seven looks an island has (its base and its floor pattern). Each is
 _Avoid_: Theme, skin
 
 **Activate**:
-To get an agent that is not working to start a run now. For a GitHub workflow it starts the run; for an agent outside GitHub it only points the owner to where they can start it.
-_Avoid_: Wake, trigger, run now (the button's wording differs, the concept is Activate)
+To get an agent that is not working to start a run now, with the **Work** button on its card. For a GitHub workflow it starts the run; for an agent outside GitHub it only points the owner to where they can start it. Everyone sees the button; for a viewer who is not signed in it asks them to sign in, and for Claude, the bot and the owner it is disabled with a note, because they cannot be started from here.
+_Avoid_: Wake, trigger, run now (the button says Work, the concept is Activate)
 
 **Admin**:
-The owner while signed in. Only the Admin sees Activate buttons.
+The owner while signed in. Only the Admin can use the Work button for real; everyone else is asked to sign in.
 _Avoid_: User, viewer (a viewer is anyone who is not the Admin)

@@ -1,5 +1,5 @@
-// Activate: what a card offers the Admin for an agent that is not working, and the life of a "run requested" from
-// the click until the real run finishes. Pure functions of the agent, the clock and what GitHub last reported, so
+// The Work button: what a card offers for an agent that is not working, and the life of a "run requested" from
+// the click until the real run finishes. Everyone sees the button; only the signed-in Admin can use it for real. Pure functions of the agent, the clock and what GitHub last reported, so
 // all of it can be tested without a browser. The browser side (sign-in, calling the server, asking GitHub) is in admin.mjs.
 // Only these repos have workflows that can be started by hand; the server enforces the same list.
 export const STARTABLE_REPOS = ['african-earth-energy-crm', 'belgium-crm', 'denmark-crm', 'netherlands-crm'];
@@ -11,17 +11,26 @@ const NOT_STARTABLE_NAMES = new Set(['pages build and deployment']);
 
 const httpsOr = (url, fallback) => (typeof url === 'string' && /^https:\/\//.test(url) ? url : fallback);
 
-// What the card offers: null (nothing), or { kind: 'activate' | 'cowork' | 'pending', label, ... }.
+// Why the button is disabled for an agent that cannot be started from here.
+function whyNot(agent) {
+  if (agent.kind === 'human') return 'This is you: you work when you do.';
+  if (agent.kind === 'builder') return agent.name === 'Auto-commit bot' ? 'The bot works by itself when its own schedule runs.' : 'Claude works when you open a session in this repo.';
+  return 'This workflow cannot be started by hand from here.';
+}
+
+// What the card offers an agent that is not working: null (nothing, it is already working), or
+// { kind: 'activate' | 'cowork' | 'pending' | 'signin' | 'manual', label, ... }.
+// 'signin' is the Work button for someone who is not signed in (it asks them to sign in), 'manual' a disabled one with a note.
 // `request` is the pending request for this agent, `phase` its current phase.
 export function offerFor(agent, { admin = false, request = null, phase = null } = {}) {
-  if (!admin || !agent) return null;
-  if (agent.kind === 'local') {
-    return agent.status === 'asleep' ? { kind: 'cowork', label: 'Open in Cowork', url: httpsOr(agent.details?.startUrl, COWORK_URL) } : null;
-  }
-  if (agent.kind !== 'workflow' || !STARTABLE_REPOS.includes(agent.repo) || NOT_STARTABLE_NAMES.has(String(agent.name).toLowerCase())) return null;
-  if (request && (phase === 'requested' || phase === 'working')) return { kind: 'pending', label: phase === 'requested' ? 'Run requested' : 'Running…' };
+  if (!agent) return null;
+  const startable = agent.kind === 'workflow' && STARTABLE_REPOS.includes(agent.repo) && !NOT_STARTABLE_NAMES.has(String(agent.name).toLowerCase());
+  if (admin && startable && request && (phase === 'requested' || phase === 'working')) return { kind: 'pending', label: phase === 'requested' ? 'Run requested' : 'Running…' };
   if (agent.status === 'running') return null;
-  return { kind: 'activate', label: agent.status === 'fail' ? 'Run again' : 'Run now', confirm: `Start ${agent.name} now?` };
+  if (!startable && agent.kind !== 'local') return { kind: 'manual', label: 'Work', note: whyNot(agent) };
+  if (!admin) return { kind: 'signin', label: 'Work', note: 'Sign in as the owner to start it.' };
+  if (agent.kind === 'local') return { kind: 'cowork', label: 'Work in Cowork', url: httpsOr(agent.details?.startUrl, COWORK_URL) };
+  return { kind: 'activate', label: agent.status === 'fail' ? 'Work again' : 'Work', confirm: `Start ${agent.name} now?` };
 }
 
 export const newRequest = (agent, now = Date.now()) => ({ agentId: agent.id, repo: agent.repo, workflow: agent.name, at: now, workflowId: null });

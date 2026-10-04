@@ -10,32 +10,47 @@ const flow = (status, extra = {}) => ({ id: 'netherlands-crm::Daily Tender Scan'
 const asleep = (extra = {}) => ({ id: 'netherlands-crm::NL Tender Scraper', name: 'NL Tender Scraper', kind: 'local', status: 'asleep', repo: 'netherlands-crm', details: { schedule: 'Weekdays · Cowork', ...extra } });
 const NOW = Date.parse('2026-10-03T12:00:00Z');
 
-test('a viewer who is not the Admin is offered nothing, for any agent', () => {
-  for (const a of [flow('ok'), flow('fail'), flow('idle'), asleep()]) assert.equal(offerFor(a, { admin: false }), null);
+test('a viewer who is not signed in sees a Work button for anything the owner could start, and signing in is how to use it', () => {
+  for (const a of [flow('ok'), flow('fail'), flow('idle'), asleep()]) {
+    const o = offerFor(a, { admin: false });
+    assert.deepEqual([o.kind, o.label], ['signin', 'Work']);
+    assert.match(o.note, /sign in/i);
+  }
 });
 
-test('the Admin can run a waiting workflow now and re-run a failing one', () => {
+test('the Admin can set a waiting workflow to work and re-run a failing one', () => {
   const ok = offerFor(flow('ok'), { admin: true }), fail = offerFor(flow('fail'), { admin: true });
-  assert.deepEqual([ok.kind, ok.label], ['activate', 'Run now']);
-  assert.deepEqual([fail.kind, fail.label], ['activate', 'Run again']);
+  assert.deepEqual([ok.kind, ok.label], ['activate', 'Work']);
+  assert.deepEqual([fail.kind, fail.label], ['activate', 'Work again']);
   assert.match(ok.confirm, /Start Daily Tender Scan now\?/);
 });
 
-test('an idle workflow can be run too', () => assert.equal(offerFor(flow('idle'), { admin: true }).kind, 'activate'));
+test('an idle workflow can be set to work too', () => assert.equal(offerFor(flow('idle'), { admin: true }).kind, 'activate'));
 
-test('a working agent has nothing to activate', () => assert.equal(offerFor(flow('running'), { admin: true }), null));
+test('a working agent has nothing to start, for the Admin and for everyone else', () => {
+  assert.equal(offerFor(flow('running'), { admin: true }), null);
+  assert.equal(offerFor(flow('running'), { admin: false }), null);
+});
 
 test('an asleep Cowork agent is offered a link to where it is started, https only', () => {
-  assert.deepEqual(offerFor(asleep(), { admin: true }), { kind: 'cowork', label: 'Open in Cowork', url: COWORK_URL });
+  assert.deepEqual(offerFor(asleep(), { admin: true }), { kind: 'cowork', label: 'Work in Cowork', url: COWORK_URL });
   assert.equal(offerFor(asleep({ startUrl: 'https://example.com/task/1' }), { admin: true }).url, 'https://example.com/task/1');
   assert.equal(offerFor(asleep({ startUrl: 'javascript:alert(1)' }), { admin: true }).url, COWORK_URL);
 });
 
-test('people and builders, the Pages deploys and repos with nothing startable get no button', () => {
-  for (const kind of ['human', 'builder']) assert.equal(offerFor({ id: 'x', name: 'You', kind, status: 'ok', repo: 'netherlands-crm' }, { admin: true }), null);
-  assert.equal(offerFor(flow('ok', { name: 'pages build and deployment' }), { admin: true }), null);
-  assert.equal(offerFor(flow('ok', { repo: 'ai-job-finder' }), { admin: true }), null);
-  assert.equal(offerFor(flow('ok', { repo: 'agent-world' }), { admin: true }), null);
+test('agents that cannot be started from here get a disabled Work button that says why', () => {
+  const claude = { id: 'x1', name: 'Claude · builder', kind: 'builder', status: 'ok', repo: 'netherlands-crm' };
+  const bot = { id: 'x2', name: 'Auto-commit bot', kind: 'builder', status: 'ok', repo: 'netherlands-crm' };
+  const you = { id: 'x3', name: 'You', kind: 'human', status: 'ok', repo: 'netherlands-crm' };
+  const others = [flow('ok', { name: 'pages build and deployment' }), flow('ok', { repo: 'ai-job-finder' }), flow('ok', { repo: 'agent-world' })];
+  for (const a of [claude, bot, you, ...others]) {
+    for (const admin of [false, true]) {
+      const o = offerFor(a, { admin });
+      assert.deepEqual([o.kind, o.label], ['manual', 'Work'], a.name);
+      assert.ok(o.note.length > 10, a.name);
+    }
+  }
+  assert.equal(new Set([claude, bot, you, others[0]].map(a => offerFor(a, { admin: true }).note)).size, 4, 'each kind explains itself');
   assert.deepEqual(STARTABLE_REPOS.slice().sort(), ['african-earth-energy-crm', 'belgium-crm', 'denmark-crm', 'netherlands-crm']);
 });
 

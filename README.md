@@ -45,9 +45,10 @@ right place.
 
 ## Activate (Admin only)
 
-Sign in once at `/agent-world/#admin` (the same login as the agent-hq admin page; nothing on the page links to it).
-While signed in, the card of any agent that is not working replaces the GitHub link with **Run now** or **Run again**.
-It asks to confirm, then starts the real GitHub workflow, shows the agent as working ("Run requested"), and follows the
+Sign in once at `/agent-world/#admin` (the same login as the agent-hq admin page; the Work button on a card opens it for you).
+Every card of an agent that is not working has a **Work** button. Without signing in it asks you to sign in; Claude, the bot
+and the owner cannot be started from here, so theirs is disabled with a note. While signed in, the button of a workflow
+replaces the GitHub link, reads **Work** (or **Work again** after a failure), asks to confirm, then starts the real GitHub workflow, shows the agent as working ("Run requested"), and follows the
 run until GitHub says it finished. Nobody else sees any of this.
 
 It works through a Supabase Edge Function (`supabase/functions/activate-agent`, see `docs/adr/0001`) that holds a
