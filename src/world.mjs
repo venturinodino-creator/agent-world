@@ -75,8 +75,8 @@ const tileXZ = ([q, r]) => {
 export const tileOffsets = rings => spiral(1 + 3 * rings * (rings + 1)).map(tileXZ);
 const ringsFor = agents => { let rings = 1; while (1 + 3 * rings * (rings + 1) < agents + 1) rings++; return rings; };
 const islandRadius = rings => TILE * SQRT3 * rings + 1.5 + PUSH;
-// The fuller an island, the smaller its buildings are drawn (down to 60%), so the astronauts in front of them stay in view.
-export const crowdScale = (agents, spots) => Math.round(Math.min(1, Math.max(0.6, 1 - ((agents / Math.max(1, spots) - 0.4) / 0.55) * 0.4)) * 1000) / 1000;
+// The fuller an island, the smaller its buildings are drawn (down to half size), so the astronauts in front of them stay in view.
+export const crowdScale = (agents, spots) => Math.round(Math.min(1, Math.max(0.5, 1 - ((agents / Math.max(1, spots) - 0.4) / 0.55) * 0.5)) * 1000) / 1000;
 
 function healthOf(agents) {
   if (agents.some(a => a.status === 'fail')) return 'fail';

@@ -212,10 +212,10 @@ export function createScene(container, { fx = null, onFxAuto = () => {}, onConte
 
     for (const a of world.agents) {
       const isl = world.islands.find(i => i.name === a.island), ph = hash(a.id);
-      const k = isl.scale ?? 1, front = FRONT * k, astro = ASTRO * (0.7 + 0.3 * k);   // a crowded island: smaller buildings, the astronaut right in front
+      const k = isl.scale ?? 1, front = FRONT * k, astro = ASTRO * (0.8 + 0.2 * k);   // a crowded island: smaller, flatter buildings and the astronaut right in front
       const building = buildingFor(a, a.status, ph, k < 0.9); building.position.set(a.pos.x, 0.14, a.pos.z);
       building.rotation.y = Math.floor(ph * 8) * (Math.PI / 4);
-      building.scale.setScalar(BUILD * k);   // chunky, like the reference
+      building.scale.set(BUILD * k, BUILD * k * (k < 0.9 ? 0.8 : 1), BUILD * k);   // chunky, like the reference; flatter on a crowded island so it hides nobody
       building.userData.agentId = a.id; addBlob(building, 0.72, 0.05, 0.55);
       const robot = buildRobot(a.kind, a.name); robot.position.set(a.pos.x, 0.14, a.pos.z + front);
       robot.scale.setScalar(astro); robot.rotation.order = 'YXZ'; robot.userData.agentId = a.id; addBlob(robot, 0.2, 0.05, 0.55);

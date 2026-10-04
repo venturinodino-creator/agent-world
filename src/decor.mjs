@@ -111,6 +111,7 @@ export function scatterDecor(world, tiles, size) {
   world.islands.forEach((isl, n) => {
     if (isl.dormant) return;
     const r2 = lcg(101 + n * 53), all = tiles(isl.rings), crowded = isl.agentCount / (all.length - 1) > 0.5, bag = crowded ? LOW : BAG;
+    if (isl.agentCount / (all.length - 1) > 0.75) return;   // a nearly full island keeps its free tiles bare
     all.forEach((t, i) => {
       if (i <= isl.agentCount) return;
       const count = crowded || r2() < 0.55 ? 1 : 2;

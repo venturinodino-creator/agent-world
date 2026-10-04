@@ -64,7 +64,7 @@ test('the fuller an island is, the smaller its buildings are drawn, so the astro
   assert.equal(crowdScale(7, 18), 1, 'a roomy island keeps full size');
   const levels = [7, 9, 11, 13, 15, 17, 18].map(n => crowdScale(n, 18));
   assert.ok(levels.every((v, i) => i === 0 || v <= levels[i - 1]), 'never grows as it fills: ' + levels);
-  assert.ok(levels.at(-1) >= 0.6 && levels.at(-1) <= 0.65, 'a full island still keeps buildings of 60%: ' + levels.at(-1));
+  assert.ok(levels.at(-1) >= 0.5 && levels.at(-1) <= 0.55, 'a full island keeps buildings of half size: ' + levels.at(-1));
   assert.ok(crowdScale(17, 18) < 0.7 && crowdScale(12, 18) > 0.75 && crowdScale(12, 18) < 1);
 });
 
