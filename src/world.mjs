@@ -75,6 +75,8 @@ const tileXZ = ([q, r]) => {
 export const tileOffsets = rings => spiral(1 + 3 * rings * (rings + 1)).map(tileXZ);
 const ringsFor = agents => { let rings = 1; while (1 + 3 * rings * (rings + 1) < agents + 1) rings++; return rings; };
 const islandRadius = rings => TILE * SQRT3 * rings + 1.5 + PUSH;
+// The fuller an island, the smaller its buildings are drawn (down to 60%), so the astronauts in front of them stay in view.
+export const crowdScale = (agents, spots) => Math.round(Math.min(1, Math.max(0.6, 1 - ((agents / Math.max(1, spots) - 0.4) / 0.55) * 0.4)) * 1000) / 1000;
 
 function healthOf(agents) {
   if (agents.some(a => a.status === 'fail')) return 'fail';
@@ -104,18 +106,18 @@ export function buildWorld(data, config = {}, now = Date.now(), opts = {}) {
     // a status override (a run the Admin just requested) is drawn in place of the status the data still shows
     if (opts.statusOverrides) list = list.map(a => (opts.statusOverrides[a.id] ? { ...a, status: opts.statusOverrides[a.id] } : a));
     const rings = ringsFor(list.length);
-    islands.push({ name, repo, url, dormant: false, agentCount: list.length, rings, radius: round(islandRadius(rings)), health: healthOf(list) });
+    islands.push({ name, repo, url, dormant: false, agentCount: list.length, rings, radius: round(islandRadius(rings)), scale: 1, health: healthOf(list) });
     list.forEach(a => agents.push({ ...a, island: name }));
   };
   for (const r of repos.filter(x => !isDormant(x))) addIsland(r.name, r.name, r.url, agentsOf(r, locals.filter(a => a.repo === r.name), now, skip));
   const lobby = locals.filter(a => !a.repo);
   if (lobby.length) addIsland('Lobby', null, null, lobby.map(a => localAgent(a, null, 'Lobby')));
   if (opts.showDormant) {
-    for (const r of repos.filter(isDormant)) islands.push({ name: r.name, repo: r.name, url: r.url, dormant: true, agentCount: 0, rings: 1, radius: CLOSED_RADIUS, health: 'dormant' });
+    for (const r of repos.filter(isDormant)) islands.push({ name: r.name, repo: r.name, url: r.url, dormant: true, agentCount: 0, rings: 1, radius: CLOSED_RADIUS, scale: 1, health: 'dormant' });
   }
   // live islands all take the size of the busiest one, so the honeycomb is even
   const rings = Math.max(1, ...islands.filter(i => !i.dormant).map(i => i.rings));
-  islands.filter(i => !i.dormant).forEach(i => { i.rings = rings; i.radius = round(islandRadius(rings)); });
+  islands.filter(i => !i.dormant).forEach(i => { i.rings = rings; i.radius = round(islandRadius(rings)); i.scale = crowdScale(i.agentCount, 3 * rings * (rings + 1)); });
 
   const { hub, placed } = layout(islands);
   islands.forEach((isl, i) => { isl.x = placed[i].x; isl.z = placed[i].z; isl.design = i % DESIGNS; });

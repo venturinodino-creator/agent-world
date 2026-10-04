@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildWorld, tileOffsets, TILE, PUSH, DESIGNS } from '../src/world.mjs';
+import { buildWorld, tileOffsets, TILE, PUSH, DESIGNS, crowdScale } from '../src/world.mjs';
 
 const NOW = Date.parse('2026-10-02T12:00:00Z');
 const iso = hoursAgo => new Date(NOW - hoursAgo * 3600e3).toISOString();
@@ -57,6 +57,24 @@ test('every island has its own design, so neighbouring plates never look alike, 
   assert.equal(new Set(first).size, DESIGNS, 'the first ' + DESIGNS + ' islands all differ: ' + first);
   assert.ok(w.islands.every(i => Number.isInteger(i.design) && i.design >= 0 && i.design < DESIGNS));
   assert.deepEqual(world(names.map(n => repo(n)), { localAgents: [{ name: 'Watcher', repo: null, schedule: 'Daily', status: 'scheduled' }] }).islands.map(i => i.design), w.islands.map(i => i.design));
+});
+
+test('the fuller an island is, the smaller its buildings are drawn, so the astronauts in front stay in view', () => {
+  assert.equal(crowdScale(0, 18), 1);
+  assert.equal(crowdScale(7, 18), 1, 'a roomy island keeps full size');
+  const levels = [7, 9, 11, 13, 15, 17, 18].map(n => crowdScale(n, 18));
+  assert.ok(levels.every((v, i) => i === 0 || v <= levels[i - 1]), 'never grows as it fills: ' + levels);
+  assert.ok(levels.at(-1) >= 0.6 && levels.at(-1) <= 0.65, 'a full island still keeps buildings of 60%: ' + levels.at(-1));
+  assert.ok(crowdScale(17, 18) < 0.7 && crowdScale(12, 18) > 0.75 && crowdScale(12, 18) < 1);
+});
+
+test('an island carries the scale for how crowded it is', () => {
+  const busy = Array.from({ length: 17 }, (_, i) => wf('Scan ' + String(i).padStart(2, '0')));
+  const w = world([repo('busy', { workflows: busy }), repo('quiet', { workflows: [wf('One'), wf('Two')] })]);
+  const by = Object.fromEntries(w.islands.map(i => [i.name, i.scale]));
+  assert.ok(by.busy < 0.7, 'busy ' + by.busy);
+  assert.equal(by.quiet, 1);
+  assert.ok(world([repo('old', { pushed: iso(24 * 60) })], { localAgents: [] }, { showDormant: true }).islands.every(i => i.scale === 1));
 });
 
 test('workflow status comes from its latest run', () => {

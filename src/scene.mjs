@@ -1,7 +1,7 @@
 // The 3D scene: renderer, camera, lights, sunny desert and sky, floating rocks, hexagon islands with their
 // buildings and robots, the hub, picking and the camera glide. What exists comes from the world model and
 // how it moves comes from anim.mjs; this file decides how it looks. Browser only (needs WebGL).
-import { THREE, HEALTH, PALETTE, buildRobot, buildingFor, buildHub, symbolSprite, workingIcon, sleepSprite, bakeStatics } from './models.mjs';
+import { THREE, HEALTH, PALETTE, buildRobot, buildingFor, buildHub, HUB_TOP, symbolSprite, workingIcon, sleepSprite, bakeStatics } from './models.mjs';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { skyDome, planets, alienGround, alienProps } from './space.mjs';
@@ -191,7 +191,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {}, onConte
     // the hub tower stands on its own cell in the middle of the honeycomb
     const hubScale = THREE.MathUtils.clamp(world.hub.radius / 4.6, 1, 2.8);
     addPlate({ x: 0, z: 0, radius: world.hub.radius }, 'dormant', 0x59d6ff, 0.7);
-    S.hub = buildHub(); S.hub.scale.setScalar(hubScale); S.hub.position.y = 0.12; root.add(S.hub); S.hubTop.set(0, 6.1 * hubScale + 0.12, 0);
+    S.hub = buildHub(); S.hub.scale.setScalar(hubScale); S.hub.position.y = 0.12; root.add(S.hub); S.hubTop.set(0, (HUB_TOP - 0.5) * hubScale + 0.12, 0);
 
     const padGeo = new THREE.CylinderGeometry(1.5, 1.56, 0.05, 8), pads = [];
     world.islands.forEach(isl => {
@@ -212,12 +212,13 @@ export function createScene(container, { fx = null, onFxAuto = () => {}, onConte
 
     for (const a of world.agents) {
       const isl = world.islands.find(i => i.name === a.island), ph = hash(a.id);
-      const building = buildingFor(a, a.status, ph); building.position.set(a.pos.x, 0.14, a.pos.z);
+      const k = isl.scale ?? 1, front = FRONT * k, astro = ASTRO * (0.7 + 0.3 * k);   // a crowded island: smaller buildings, the astronaut right in front
+      const building = buildingFor(a, a.status, ph, k < 0.9); building.position.set(a.pos.x, 0.14, a.pos.z);
       building.rotation.y = Math.floor(ph * 8) * (Math.PI / 4);
-      building.scale.setScalar(BUILD);   // chunky, like the reference
+      building.scale.setScalar(BUILD * k);   // chunky, like the reference
       building.userData.agentId = a.id; addBlob(building, 0.72, 0.05, 0.55);
-      const robot = buildRobot(a.kind, a.name); robot.position.set(a.pos.x, 0.14, a.pos.z + FRONT);
-      robot.scale.setScalar(ASTRO); robot.rotation.order = 'YXZ'; robot.userData.agentId = a.id; addBlob(robot, 0.2, 0.05, 0.55);
+      const robot = buildRobot(a.kind, a.name); robot.position.set(a.pos.x, 0.14, a.pos.z + front);
+      robot.scale.setScalar(astro); robot.rotation.order = 'YXZ'; robot.userData.agentId = a.id; addBlob(robot, 0.2, 0.05, 0.55);
       const carry = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshStandardMaterial({ color: PALETTE.orange, roughness: 0.45 }));
       carry.position.set(0, 0.45, 0.24); carry.visible = false; robot.add(carry);
       const sparks = a.status === 'running' ? Array.from({ length: 6 }, () => { const sp = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), new THREE.MeshBasicMaterial({ color: 0xfff1a8 })); root.add(sp); return sp; }) : [];
@@ -228,7 +229,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {}, onConte
       const icon = a.status === 'running' ? iconProto.clone() : null; icon?.scale.set(1.15, 1.15, 1);
       [alarm, icon, ...zs].filter(Boolean).forEach(s => root.add(s));
       root.add(building, robot); S.pickables.push(building, robot);
-      S.agents.set(a.id, { agent: a, building, robot, carry, sparks, halo, bx: a.pos.x, bz: a.pos.z + FRONT, ph, alarm, icon, zs, island: isl,
+      S.agents.set(a.id, { agent: a, building, robot, carry, sparks, halo, bx: a.pos.x, bz: a.pos.z + front, front, astro, ph, alarm, icon, zs, island: isl,
         hq: { x: isl.x + (dx / len) * 5.6, z: isl.z + (dz / len) * 5.6 } });
     }
 
@@ -268,7 +269,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {}, onConte
 
   function focusAgent(id) {
     const r = S.agents.get(id); if (!r) return;
-    const target = new THREE.Vector3(r.bx, 0.7, r.bz - FRONT * 0.5), dir = camera.position.clone().sub(controls.target).normalize();
+    const target = new THREE.Vector3(r.bx, 0.7, r.bz - r.front * 0.5), dir = camera.position.clone().sub(controls.target).normalize();
     glide(target, target.clone().add(dir.multiplyScalar(12)));
   }
   function focusIsland(name) {
@@ -312,7 +313,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {}, onConte
       r.carry.visible = !!er?.carrying;
       // asleep: lying on its side, helmet towards the camera, centred on its spot and a little smaller so it stays inside its tile;
       // working: picking things up and carrying them to the base (see workCycle); anything else sits still, asleep
-      const lying = p.asleep && !er, sc = lying ? ASTRO * 0.85 : ASTRO, tilt = lying ? 1.45 : 0;
+      const lying = p.asleep && !er, sc = lying ? r.astro * 0.85 : r.astro, tilt = lying ? 1.45 : 0;
       r.robot.scale.setScalar(sc);
       r.robot.position.set(rx + (lying ? Math.sin(tilt) * 0.36 * sc : 0), lying ? 0.14 + 0.14 * sc + Math.sin(t * 1.4 + r.ph * 6) * 0.02 : y, rz);
       r.robot.rotation.y = yaw;
@@ -333,7 +334,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {}, onConte
       }
       r.sparks.forEach((sp, i) => {   // a working agent throws sparks off its building
         const u = (t * 1.6 + i / 6 + r.ph) % 1, ang = i * 1.1 + r.ph * 6;
-        sp.position.set(r.bx + Math.cos(ang) * 1.3 * u, 2.2 + u * 2.6, r.bz - FRONT + Math.sin(ang) * 1.3 * u); sp.scale.setScalar(Math.max(0.01, 1 - u));
+        sp.position.set(r.bx + Math.cos(ang) * 1.3 * u, 2.2 + u * 2.6, r.bz - r.front + Math.sin(ang) * 1.3 * u); sp.scale.setScalar(Math.max(0.01, 1 - u));
       });
     }
 
@@ -345,7 +346,7 @@ export function createScene(container, { fx = null, onFxAuto = () => {}, onConte
 
     const sel = ui.selectedId && S.agents.get(ui.selectedId);
     S.ring.visible = !!sel;
-    if (sel) { S.ring.position.set(sel.bx, 0.2, sel.bz - FRONT * 0.5); S.ring.scale.setScalar(1 + Math.sin(t * 5) * 0.06); }
+    if (sel) { S.ring.position.set(sel.bx, 0.2, sel.bz - sel.front * 0.5); S.ring.scale.setScalar(1 + Math.sin(t * 5) * 0.06); }
 
     const live = new Set(ui.papers || []);
     for (const [pg, mm] of S.papers) if (!live.has(pg)) { mm.removeFromParent(); mm.material.dispose(); S.papers.delete(pg); }

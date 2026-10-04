@@ -164,35 +164,41 @@ function buildHabPod(status) {
 // ---- the rocket, after the reference: a lathe-turned hull with a rounded blue-tipped nose, a blue band, three round windows,
 // an arched glowing door, three big swept fins with blue tips, an orange engine bell and gold landing legs, on a round pad.
 const HULL_PROFILE = [[0.0, 0.1], [0.12, 0.1], [0.16, 0.16], [0.175, 0.3], [0.17, 0.55], [0.155, 0.78], [0.12, 0.95], [0.07, 1.07], [0.0, 1.14]];
-const hullRadius = y => { for (let i = 1; i < HULL_PROFILE.length; i++) { const [r0, y0] = HULL_PROFILE[i - 1], [r1, y1] = HULL_PROFILE[i]; if (y <= y1) return r0 + ((r1 - r0) * (y - y0)) / (y1 - y0); } return 0; };
-function rocketParts(g, { band, ring, pad = true, detail = false }) {
-  const put = adder(g), rim = steel(), gold = orangeM();
-  put(new THREE.LatheGeometry(HULL_PROFILE.map(([r, y]) => new THREE.Vector2(r, y)), 24), hull(), 0, 0, 0);
-  put(new THREE.ConeGeometry(0.058, 0.13, 12), blueM(), 0, 1.09, 0);
-  put(C(0.158, 0.158, 0.05, 24), band, 0, 0.84, 0);
-  for (const y of [0.7, 0.54, 0.38]) {
-    const r = hullRadius(y) - 0.004;
+// A taller rocket (`ext` model units longer) stretches the straight middle of the hull and moves everything above it up.
+const profileFor = ext => HULL_PROFILE.map(([r, y]) => [r, y > 0.5 ? y + ext : y]);
+const hullRadius = (y, P = HULL_PROFILE) => { for (let i = 1; i < P.length; i++) { const [r0, y0] = P[i - 1], [r1, y1] = P[i]; if (y <= y1) return r0 + ((r1 - r0) * (y - y0)) / (y1 - y0); } return 0; };
+function rocketParts(g, { band, ring, pad = true, detail = false, legs = true, ext = 0 }) {
+  const put = adder(g), rim = steel(), gold = orangeM(), P = profileFor(ext), hr = y => hullRadius(y, P), up = y => (y > 0.5 ? y + ext : y);
+  put(new THREE.LatheGeometry(P.map(([r, y]) => new THREE.Vector2(r, y)), 24), hull(), 0, 0, 0);
+  put(new THREE.ConeGeometry(0.058, 0.13, 12), blueM(), 0, 1.09 + ext, 0);
+  put(C(0.158, 0.158, 0.05, 24), band, 0, 0.84 + ext, 0);
+  const top = 0.7 + ext * 0.8, n = ext > 0.2 ? 4 : 3, windows = Array.from({ length: n }, (_, i) => 0.38 + ((top - 0.38) * i) / (n - 1));
+  for (const y of windows) {
+    const r = hr(y) - 0.004;
     put(C(0.052, 0.052, 0.03, 16).rotateX(Math.PI / 2), rim, 0, y, r); put(C(0.037, 0.037, 0.034, 16).rotateX(Math.PI / 2), ring, 0, y, r + 0.006);
   }
-  const r0 = hullRadius(0.2);
+  const r0 = hr(0.2);
   put(B(0.1, 0.12, 0.05), rim, 0, 0.2, r0); put(C(0.05, 0.05, 0.05, 14).rotateX(Math.PI / 2), rim, 0, 0.26, r0);
   put(B(0.072, 0.1, 0.055), ring, 0, 0.2, r0 + 0.004); put(C(0.036, 0.036, 0.055, 14).rotateX(Math.PI / 2), ring, 0, 0.25, r0 + 0.004);
   put(C(0.07, 0.1, 0.13, 14), gold, 0, 0.065, 0);
   if (detail) {   // the big one gets the hull detail of the buildings: plate seams, a fairing ring, conduits, a cluster of nozzles
-    for (const y of [0.22, 0.36, 0.5, 0.64, 0.74, 0.9]) put(C(hullRadius(y) + 0.002, hullRadius(y) + 0.002, 0.007, 24), darkM(), 0, y, 0);
-    put(C(hullRadius(0.97) + 0.004, hullRadius(0.97) + 0.004, 0.02, 24), rim, 0, 0.97, 0);
-    for (const a of [0.9, 2.2, 4.1, 5.3]) put(B(0.014, 0.4, 0.014), rim, Math.sin(a) * 0.178, 0.45, Math.cos(a) * 0.178);
+    const seams = [0.22, 0.36, 0.5, 0.64, 0.74, 0.9].map(up);
+    if (ext > 0.2) seams.push(0.5 + ext * 0.33, 0.5 + ext * 0.66);
+    for (const y of seams) put(C(hr(y) + 0.002, hr(y) + 0.002, 0.007, 24), darkM(), 0, y, 0);
+    put(C(hr(0.97 + ext) + 0.004, hr(0.97 + ext) + 0.004, 0.02, 24), rim, 0, 0.97 + ext, 0);
+    for (const a of [0.9, 2.2, 4.1, 5.3]) put(B(0.014, 0.35 + ext, 0.014), rim, Math.sin(a) * 0.178, 0.375 + ext / 2, Math.cos(a) * 0.178);
     for (let k = 0; k < 4; k++) { const a = (k * Math.PI) / 2 + Math.PI / 4; put(C(0.022, 0.045, 0.07, 10), darkM(), Math.sin(a) * 0.075, 0.04, Math.cos(a) * 0.075); }
-    for (let k = 0; k < 18; k++) { const a = (k * Math.PI * 2) / 18, r = hullRadius(0.84) + 0.004; put(new THREE.SphereGeometry(0.007, 5, 4), rim, Math.sin(a) * r, 0.87, Math.cos(a) * r); }
+    for (let k = 0; k < 18; k++) { const a = (k * Math.PI * 2) / 18, r = hr(0.84 + ext) + 0.004; put(new THREE.SphereGeometry(0.007, 5, 4), rim, Math.sin(a) * r, 0.87 + ext, Math.cos(a) * r); }
   }
   // fins: a swept triangle with a blue tip, three of them round the hull
-  const finShape = new THREE.Shape([new THREE.Vector2(0.13, 0.66), new THREE.Vector2(0.42, 0.08), new THREE.Vector2(0.13, 0.14)]);
+  const finShape = new THREE.Shape([new THREE.Vector2(0.13, 0.66 + ext * 0.6), new THREE.Vector2(0.42, 0.08), new THREE.Vector2(0.13, 0.14)]);
   const tipShape = new THREE.Shape([new THREE.Vector2(0.34, 0.2), new THREE.Vector2(0.42, 0.08), new THREE.Vector2(0.29, 0.1)]);
   for (let i = 0; i < 3; i++) {
     const fin = new THREE.Group(); fin.rotation.y = (i * Math.PI * 2) / 3;
     fin.add(mesh(new THREE.ExtrudeGeometry(finShape, { depth: 0.035, bevelEnabled: false }).translate(0, 0, -0.0175), hull(), 0, 0, 0));
     fin.add(mesh(new THREE.ExtrudeGeometry(tipShape, { depth: 0.042, bevelEnabled: false }).translate(0, 0, -0.021), blueM(), 0, 0, 0));
     g.add(fin);
+    if (!legs) continue;
     const t = (i * Math.PI * 2) / 3 + Math.PI / 3, c = Math.cos(t), s = Math.sin(t);
     g.add(strut([c * 0.19, 0.3, s * 0.19], [c * 0.5, 0.035, s * 0.5], 0.017, gold));
     put(C(0.06, 0.06, 0.02, 12), gold, c * 0.5, 0.025, s * 0.5);
@@ -282,28 +288,20 @@ export function buildBase(status, scale = 1) {
 
 // The hub in the middle of the world: the same slim rocket, much bigger, on a landing pad, that pages fly up to.
 // `ring` is the glow (the pad's light ring and the round windows) and `orb` the beacon on the nose; the scene pulses both.
+const HUB_SCALE = 4.9, HUB_EXT = 0.5;
+export const HUB_TOP = 1.04 + HUB_SCALE * (1.14 + HUB_EXT);   // how high the nose of the big rocket is, in hub units
 export function buildHub() {
   const g = new THREE.Group(), put = adder(g), ring = glow(0x7fd6ff, 1.2), orb = glow(0xff9a3a, 1.8), beacon = glow(0xff9a3a, 1.6);
   put(C(2.6, 2.9, 0.7, 20), skinned(concreteSkin(0x4c5262), { roughness: 0.85 }), 0, 0.35, 0);
   put(C(2.0, 2.2, 0.3, 20), hull(), 0, 0.85, 0);
   put(C(1.88, 1.88, 0.05, 20), ring, 0, 1.02, 0);
   put(new THREE.TorusGeometry(1.55, 0.05, 5, 48), orangeM(), 0, 1.07, 0, [Math.PI / 2, 0, 0]);
-  const rocket = new THREE.Group(); rocket.scale.setScalar(4.9); rocket.position.y = 1.04; g.add(rocket);
-  rocketParts(rocket, { band: toy(0x2f6fe0, { roughness: 0.35 }), ring, pad: false, detail: true });
-  put(C(0.02, 0.02, 0.45, 5), steel(), 0, 7.0, 0); put(new THREE.SphereGeometry(0.15, 12, 8), orb, 0, 7.3, 0);
-  // the launch pad: a service gantry beside the rocket with swing arms that reach the hull, floodlights on posts, fuel spheres
-  const GX = -1.7, gantryTop = 1.04 + 5.5;
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) put(B(0.09, 5.5, 0.09), steel(), GX + sx * 0.28, 1.04 + 2.75, sz * 0.28);
-  for (let y = 1.5; y < gantryTop; y += 0.9) {
-    put(B(0.66, 0.05, 0.05), steel(), GX, y, 0.28); put(B(0.66, 0.05, 0.05), steel(), GX, y, -0.28);
-    put(B(0.05, 0.05, 0.66), steel(), GX - 0.28, y, 0); put(B(0.05, 0.05, 0.66), steel(), GX + 0.28, y, 0);
-    g.add(strut([GX - 0.28, y, 0.28], [GX + 0.28, y + 0.9, 0.28], 0.02, steel())); g.add(strut([GX + 0.28, y, -0.28], [GX - 0.28, y + 0.9, -0.28], 0.02, steel()));
-  }
-  for (const y of [2.6, 4.0, 5.3]) { put(B(0.78, 0.09, 0.2), orangeM(), GX + 0.62, y, 0); put(B(0.12, 0.16, 0.26), steel(), GX + 1.0, y, 0); }
-  put(B(0.7, 0.07, 0.7), steel(), GX, gantryTop, 0); put(C(0.012, 0.012, 0.5, 5), steel(), GX, gantryTop + 0.28, 0); put(new THREE.SphereGeometry(0.06, 8, 6), orb, GX, gantryTop + 0.56, 0);
+  const rocket = new THREE.Group(); rocket.scale.setScalar(HUB_SCALE); rocket.position.y = 1.04; g.add(rocket);
+  rocketParts(rocket, { band: toy(0x2f6fe0, { roughness: 0.35 }), ring, pad: false, detail: true, legs: false, ext: HUB_EXT });
+  put(C(0.02, 0.02, 0.45, 5), steel(), 0, HUB_TOP + 0.37, 0); put(new THREE.SphereGeometry(0.15, 12, 8), orb, 0, HUB_TOP + 0.67, 0);
+  // the launch pad: floodlights on posts and two fuel spheres
   for (let k = 0; k < 4; k++) {
     const a = (k * Math.PI) / 2 + Math.PI / 4 + 0.5, x = Math.sin(a) * 2.35, z = Math.cos(a) * 2.35;
-    if (Math.abs(x - GX) < 0.9 && Math.abs(z) < 0.9) continue;
     put(C(0.03, 0.04, 1.0, 6), steel(), x, 1.55, z); put(B(0.26, 0.1, 0.16), ring, x, 2.1, z, [0, a, 0]);
   }
   for (const a of [Math.PI * 0.62, Math.PI * 1.38]) {
@@ -318,8 +316,10 @@ export function buildHub() {
 // Variety between neighbouring buildings comes from a stable number per agent (0..1). Workflows are one of nine habitats,
 // Claude is a rocket, the auto-commit bot a rover, you a cabin with a flag, and Cowork agents are dishes.
 const HABITATS = [buildHabDome, buildHabTube, buildBarrel, buildSilo, buildGreenhouse, buildStorage, buildHangar, buildWaterTower, buildHabPod];
-export const buildingFor = (agent, status, pick = 0) =>
-  agent.kind === 'workflow' ? HABITATS[Math.floor(pick * HABITATS.length) % HABITATS.length](status)
+const LOW_HABITATS = [buildHabDome, buildHabTube, buildBarrel, buildGreenhouse, buildStorage, buildHabPod];   // no tall silo, water tower or wide hangar on a crowded island
+const habitat = (status, pick, low) => { const pool = low ? LOW_HABITATS : HABITATS; return pool[Math.floor(pick * pool.length) % pool.length](status); };
+export const buildingFor = (agent, status, pick = 0, low = false) =>
+  agent.kind === 'workflow' ? habitat(status, pick, low)
   : agent.kind === 'human' ? buildCabin(status)
   : agent.kind === 'local' ? buildDish(status)
   : agent.name === 'Auto-commit bot' ? buildRover(status) : buildRocket(status);
