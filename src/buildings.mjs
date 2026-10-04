@@ -165,7 +165,7 @@ function buildHabPod(status) {
 // an arched glowing door, three big swept fins with blue tips, an orange engine bell and gold landing legs, on a round pad.
 const HULL_PROFILE = [[0.0, 0.1], [0.12, 0.1], [0.16, 0.16], [0.175, 0.3], [0.17, 0.55], [0.155, 0.78], [0.12, 0.95], [0.07, 1.07], [0.0, 1.14]];
 const hullRadius = y => { for (let i = 1; i < HULL_PROFILE.length; i++) { const [r0, y0] = HULL_PROFILE[i - 1], [r1, y1] = HULL_PROFILE[i]; if (y <= y1) return r0 + ((r1 - r0) * (y - y0)) / (y1 - y0); } return 0; };
-function rocketParts(g, { band, ring, pad = true }) {
+function rocketParts(g, { band, ring, pad = true, detail = false }) {
   const put = adder(g), rim = steel(), gold = orangeM();
   put(new THREE.LatheGeometry(HULL_PROFILE.map(([r, y]) => new THREE.Vector2(r, y)), 24), hull(), 0, 0, 0);
   put(new THREE.ConeGeometry(0.058, 0.13, 12), blueM(), 0, 1.09, 0);
@@ -178,6 +178,13 @@ function rocketParts(g, { band, ring, pad = true }) {
   put(B(0.1, 0.12, 0.05), rim, 0, 0.2, r0); put(C(0.05, 0.05, 0.05, 14).rotateX(Math.PI / 2), rim, 0, 0.26, r0);
   put(B(0.072, 0.1, 0.055), ring, 0, 0.2, r0 + 0.004); put(C(0.036, 0.036, 0.055, 14).rotateX(Math.PI / 2), ring, 0, 0.25, r0 + 0.004);
   put(C(0.07, 0.1, 0.13, 14), gold, 0, 0.065, 0);
+  if (detail) {   // the big one gets the hull detail of the buildings: plate seams, a fairing ring, conduits, a cluster of nozzles
+    for (const y of [0.22, 0.36, 0.5, 0.64, 0.74, 0.9]) put(C(hullRadius(y) + 0.002, hullRadius(y) + 0.002, 0.007, 24), darkM(), 0, y, 0);
+    put(C(hullRadius(0.97) + 0.004, hullRadius(0.97) + 0.004, 0.02, 24), rim, 0, 0.97, 0);
+    for (const a of [0.9, 2.2, 4.1, 5.3]) put(B(0.014, 0.4, 0.014), rim, Math.sin(a) * 0.178, 0.45, Math.cos(a) * 0.178);
+    for (let k = 0; k < 4; k++) { const a = (k * Math.PI) / 2 + Math.PI / 4; put(C(0.022, 0.045, 0.07, 10), darkM(), Math.sin(a) * 0.075, 0.04, Math.cos(a) * 0.075); }
+    for (let k = 0; k < 18; k++) { const a = (k * Math.PI * 2) / 18, r = hullRadius(0.84) + 0.004; put(new THREE.SphereGeometry(0.007, 5, 4), rim, Math.sin(a) * r, 0.87, Math.cos(a) * r); }
+  }
   // fins: a swept triangle with a blue tip, three of them round the hull
   const finShape = new THREE.Shape([new THREE.Vector2(0.13, 0.66), new THREE.Vector2(0.42, 0.08), new THREE.Vector2(0.13, 0.14)]);
   const tipShape = new THREE.Shape([new THREE.Vector2(0.34, 0.2), new THREE.Vector2(0.42, 0.08), new THREE.Vector2(0.29, 0.1)]);
@@ -282,8 +289,28 @@ export function buildHub() {
   put(C(1.88, 1.88, 0.05, 20), ring, 0, 1.02, 0);
   put(new THREE.TorusGeometry(1.55, 0.05, 5, 48), orangeM(), 0, 1.07, 0, [Math.PI / 2, 0, 0]);
   const rocket = new THREE.Group(); rocket.scale.setScalar(4.9); rocket.position.y = 1.04; g.add(rocket);
-  rocketParts(rocket, { band: toy(0x2f6fe0, { roughness: 0.35 }), ring, pad: false });
+  rocketParts(rocket, { band: toy(0x2f6fe0, { roughness: 0.35 }), ring, pad: false, detail: true });
   put(C(0.02, 0.02, 0.45, 5), steel(), 0, 7.0, 0); put(new THREE.SphereGeometry(0.15, 12, 8), orb, 0, 7.3, 0);
+  // the launch pad: a service gantry beside the rocket with swing arms that reach the hull, floodlights on posts, fuel spheres
+  const GX = -1.7, gantryTop = 1.04 + 5.5;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) put(B(0.09, 5.5, 0.09), steel(), GX + sx * 0.28, 1.04 + 2.75, sz * 0.28);
+  for (let y = 1.5; y < gantryTop; y += 0.9) {
+    put(B(0.66, 0.05, 0.05), steel(), GX, y, 0.28); put(B(0.66, 0.05, 0.05), steel(), GX, y, -0.28);
+    put(B(0.05, 0.05, 0.66), steel(), GX - 0.28, y, 0); put(B(0.05, 0.05, 0.66), steel(), GX + 0.28, y, 0);
+    g.add(strut([GX - 0.28, y, 0.28], [GX + 0.28, y + 0.9, 0.28], 0.02, steel())); g.add(strut([GX + 0.28, y, -0.28], [GX - 0.28, y + 0.9, -0.28], 0.02, steel()));
+  }
+  for (const y of [2.6, 4.0, 5.3]) { put(B(0.78, 0.09, 0.2), orangeM(), GX + 0.62, y, 0); put(B(0.12, 0.16, 0.26), steel(), GX + 1.0, y, 0); }
+  put(B(0.7, 0.07, 0.7), steel(), GX, gantryTop, 0); put(C(0.012, 0.012, 0.5, 5), steel(), GX, gantryTop + 0.28, 0); put(new THREE.SphereGeometry(0.06, 8, 6), orb, GX, gantryTop + 0.56, 0);
+  for (let k = 0; k < 4; k++) {
+    const a = (k * Math.PI) / 2 + Math.PI / 4 + 0.5, x = Math.sin(a) * 2.35, z = Math.cos(a) * 2.35;
+    if (Math.abs(x - GX) < 0.9 && Math.abs(z) < 0.9) continue;
+    put(C(0.03, 0.04, 1.0, 6), steel(), x, 1.55, z); put(B(0.26, 0.1, 0.16), ring, x, 2.1, z, [0, a, 0]);
+  }
+  for (const a of [Math.PI * 0.62, Math.PI * 1.38]) {
+    const x = Math.sin(a) * 2.5, z = Math.cos(a) * 2.5;
+    put(new THREE.SphereGeometry(0.34, 14, 10), hull(), x, 1.05, z); put(new THREE.TorusGeometry(0.345, 0.018, 5, 24), blueM(), x, 1.05, z, [Math.PI / 2, 0, 0]);
+    put(C(0.2, 0.26, 0.16, 12), steel(), x, 0.78, z); g.add(strut([x, 1.0, z], [Math.sin(a) * 1.5, 1.2, Math.cos(a) * 1.5], 0.03, steel()));
+  }
   g.userData = { orb, ring, beacon };
   return flatten(g);
 }
