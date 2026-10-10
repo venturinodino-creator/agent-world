@@ -3,6 +3,13 @@
 // A repo that is not in the loaded data is simply left out of the world, as is anything in it.
 // Optional startUrl: where the Admin's "Open in Cowork" button goes for that agent (https only; a generic link is used without it).
 export const CONFIG = {
+  // Live websites the world watches: one island each, working while the site answers. The page can only see whether it answers.
+  sites: [
+    { name: 'NL CRM', url: 'https://els-crm.dinov.workers.dev/' },
+    { name: 'DK CRM', url: 'https://els-crm.dinov.workers.dev/dk/' },
+    { name: 'BE CRM', url: 'https://els-crm.dinov.workers.dev/be/' },
+    { name: 'CRM landing', url: 'https://els-crm.dinov.workers.dev/landing' },
+  ],
   // Workflows that are plumbing, not an agent that does a job: they get no building and no astronaut (matched on the name, any case).
   skipWorkflows: ['pages build and deployment', 'Smoke check', 'CI'],
   localAgents: [

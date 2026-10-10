@@ -2,6 +2,7 @@
 // hexagon islands (one per repo), the agents standing on them and the recent events. Pure (no DOM, no
 // network), so the same input always gives the same world and it can be tested without a browser.
 // Positions are on the ground plane (x, z) in tile sizes; a tile is a hexagon with circumradius 1.
+import { siteStatus, siteLatest } from './sites.mjs';
 const DAY = 864e5;
 const DORMANT_DAYS = 30;     // matches the agent-hq legend: dormant = quiet for more than 30 days
 const RUNNING_WINDOW = 30 * 60e3;   // a commit this fresh means the committer is working right now
@@ -52,6 +53,10 @@ function agentsOf(r, localAgents, now, skip) {
   for (const a of localAgents) out.push(localAgent(a, r.name, r.name));
   return out;
 }
+
+// A website the world watches: one island with one agent, working while the site answers (see sites.mjs).
+const siteAgent = (site, probe) => ({ id: `${site.name}::Website`, name: 'Website', kind: 'site', status: siteStatus(probe), repo: null, url: site.url,
+  details: { latest: siteLatest(probe) } });
 
 const localAgent = (a, repo, islandName) => ({ id: `${islandName}::${a.name}`, name: a.name, kind: 'local', status: LOCAL_STATUS[a.status] || 'asleep',
   repo, url: null, details: { schedule: a.schedule || '', role: a.role || '', note: LOCAL_NOTE, startUrl: a.startUrl || '' } });
@@ -116,6 +121,7 @@ export function buildWorld(data, config = {}, now = Date.now(), opts = {}) {
   for (const r of repos.filter(x => !isDormant(x))) addIsland(r.name, r.name, r.url, agentsOf(r, locals.filter(a => a.repo === r.name), now, skip));
   const lobby = locals.filter(a => !a.repo);
   if (lobby.length) addIsland('Lobby', null, null, lobby.map(a => localAgent(a, null, 'Lobby')));
+  for (const s of config.sites || []) addIsland(s.name, null, s.url, [siteAgent(s, opts.probes?.[s.url])]);
   if (opts.showDormant) {
     for (const r of repos.filter(isDormant)) islands.push({ name: r.name, repo: r.name, url: r.url, dormant: true, agentCount: 0, rings: 1, radius: CLOSED_RADIUS, scale: 1, health: 'dormant' });
   }

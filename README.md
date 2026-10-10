@@ -37,6 +37,16 @@ hub, and the activity feed lists it. Browsers pause animation in background tabs
 Plumbing workflows (Pages deploys, smoke checks, CI) are not agents and are left out: see `skipWorkflows` in
 `src/config.mjs`. A crowded island is drawn with smaller, flatter, low-profile buildings (down to half size), keeps its free tiles bare, and its astronauts stand right in front of their building, so the agents stay in view.
 
+## Websites
+
+Live websites are watched too, one island each, listed under `sites` in `src/config.mjs` (today the four Research CRM
+addresses on `els-crm.dinov.workers.dev`: NL at `/`, DK at `/dk/`, BE at `/be/` and the landing page). Every refresh the page
+asks each site for a page. A site that answers is **working** (a teal astronaut carries items to the island's base, the card
+says Live and shows the answer time); one that does not answer within eight seconds is **failing** (it sleeps with a red "!"
+and appears in the overview's attention list). The page can only see whether a site answers, never what it says: the sites send
+no cross-origin headers, so an error page counts as an answer. These islands need no GitHub data, so they stay even when the
+repos behind them are private.
+
 ## Cowork / local agents
 
 GitHub cannot see agents that run elsewhere, so they are listed by hand in `src/config.mjs`. They are shown asleep and
@@ -66,7 +76,7 @@ connection and a browser with WebGL. Every model and texture is drawn in code; t
 
 | Area | Files |
 | --- | --- |
-| Pure logic, tested without a browser | `world.mjs` (islands, agents, events, designs), `anim.mjs` (poses, the work cycle, the replay clock), `overview.mjs` (manager totals), `activation.mjs`, `data.mjs`, `feed.mjs` |
+| Pure logic, tested without a browser | `world.mjs` (islands, agents, events, designs), `sites.mjs` (website checks), `anim.mjs` (poses, the work cycle, the replay clock), `overview.mjs` (manager totals), `activation.mjs`, `data.mjs`, `feed.mjs` |
 | Page | `main.mjs` (wires everything), `list.mjs` (overview panel), `panel.mjs` (agent card), `admin.mjs`, `requests.mjs`, `config.mjs`, `index.html`, `style.css` |
 | 3D | `scene.mjs`, `post.mjs` (effects), `space.mjs` (sky, planet, ground), `kit.mjs` (materials and merging), `buildings.mjs`, `bases.mjs`, `decor.mjs`, `models.mjs` (astronauts, symbols), `textures.mjs`, `grounding.mjs` |
 

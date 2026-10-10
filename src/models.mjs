@@ -6,11 +6,11 @@ export { PALETTE, STATUS, HEALTH, bakeStatics } from './kit.mjs';
 export { buildHub, buildingFor, HUB_TOP } from './buildings.mjs';
 
 // An astronaut for every agent: a chunky suit in a saturated colour that tells the kind of agent apart and stands out
-// from the white and grey buildings (orange for workflows, pink for Claude, red for the bot, violet for Cowork, blue for
+// from the white and grey buildings (orange for workflows, pink for Claude, red for the bot, violet for Cowork, teal for a website, blue for
 // you), with white stripes and a mission patch, a big helmet in the suit colour with a dark glass visor, ear pods, a chest control
 // box with a hose to the backpack, dark puffy gloves and boots. No face: the visor is just glass.
 // The patch is a plain coloured disc, not any real agency's badge.
-const SUITS = { workflow: 0xff7a1a, builder: 0xff3d8a, bot: 0xe5353b, human: 0x2f86ff, local: 0x9a62ff };
+const SUITS = { workflow: 0xff7a1a, builder: 0xff3d8a, bot: 0xe5353b, human: 0x2f86ff, local: 0x9a62ff, site: 0x14b8a6 };
 export function buildRobot(kind, name) {
   const key = kind === 'builder' ? (name === 'Auto-commit bot' ? 'bot' : 'builder') : SUITS[kind] ? kind : 'workflow';
   const SUIT = SUITS[key], trim = 0xffffff;

@@ -2,6 +2,7 @@
 // and replay the last day's activity on a loop so something is always happening.
 import { buildWorld } from './world.mjs';
 import { loadData } from './data.mjs';
+import { probeAll, siteSignature, siteLatest } from './sites.mjs';
 import { CONFIG } from './config.mjs';
 import { renderPanel, ago } from './panel.mjs';
 import { renderList } from './list.mjs';
@@ -24,7 +25,7 @@ function setFeedOpen(open) {
 toggle.onclick = () => setFeedOpen(feedBox.classList.contains('collapsed'));
 try { if (localStorage.getItem('world.feedOpen') === '1') setFeedOpen(true); } catch { /* collapsed by default */ }
 const labels = $('#labels'), card = $('#card'), side = $('#side');
-const state = { builtAt: 0, data: null, world: null, selectedAgent: null, selectedIsland: null, hoverAgent: null, showDormant: false, expanded: new Set(), needsFit: true };
+const state = { builtAt: 0, data: null, probes: {}, world: null, selectedAgent: null, selectedIsland: null, hoverAgent: null, showDormant: false, expanded: new Set(), needsFit: true };
 const ui = { papers: [], errands: [], hubGlow: 0 };
 const bubbles = new Map();       // agent id -> { el, from, until }
 const islandLabels = new Map();  // island name -> element
@@ -71,10 +72,10 @@ onAdminChange(() => { showAdmin(); act.confirming = act.busy = act.error = null;
 // ----- building and refreshing the world
 function rebuild() {
   if (!state.data) return;
-  const base = buildWorld(state.data, CONFIG, Date.now(), { showDormant: state.showDormant });
+  const base = buildWorld(state.data, CONFIG, Date.now(), { showDormant: state.showDormant, probes: state.probes });
   reqs.reconcileWith(base.agents);   // a run the hourly data has caught up with no longer needs its own overlay
   const overrides = reqs.overrides();
-  state.world = Object.keys(overrides).length ? buildWorld(state.data, CONFIG, Date.now(), { showDormant: state.showDormant, statusOverrides: overrides }) : base;
+  state.world = Object.keys(overrides).length ? buildWorld(state.data, CONFIG, Date.now(), { showDormant: state.showDormant, probes: state.probes, statusOverrides: overrides }) : base;
   const w = state.world;
   if (state.selectedAgent && !w.agents.some(a => a.id === state.selectedAgent)) state.selectedAgent = null;
   if (state.selectedIsland && !w.islands.some(i => i.name === state.selectedIsland)) state.selectedIsland = null;
@@ -133,7 +134,11 @@ function selectIsland(name) {
 function clearSelection() { state.selectedAgent = null; refreshUi(); }
 
 async function refresh() {
-  const data = await loadData();
+  // the data and the websites are asked at the same time, so the first picture already knows which sites are up
+  const [data, probes] = await Promise.all([loadData(), probeAll(CONFIG.sites || [])]);
+  const flipped = siteSignature(probes) !== siteSignature(state.probes);
+  state.probes = probes;
+  for (const a of state.world?.agents || []) if (a.kind === 'site') a.details = { ...a.details, latest: siteLatest(probes[a.url]) };   // a fresh answer time without rebuilding the world
   if (!data) {
     message(state.data ? 'Could not refresh the data, showing the last copy.' : 'Could not load the data, so the world is empty. Check your connection and reload.');
     return;
@@ -141,9 +146,9 @@ async function refresh() {
   // The data only changes about once an hour, so most five-minute refreshes find the same snapshot. Rebuilding the
   // whole 3D world for nothing costs a visible hitch, so it is only redone for new data or when the clock-based
   // statuses (a committer counts as working for 30 minutes) may have moved on.
-  const same = state.data && data.generatedAt && data.generatedAt === state.data.generatedAt && Date.now() - state.builtAt < 15 * 60e3;
+  const same = !flipped && state.data && data.generatedAt && data.generatedAt === state.data.generatedAt && Date.now() - state.builtAt < 15 * 60e3;
   message(''); state.data = data;
-  if (!same) { rebuild(); state.builtAt = Date.now(); }     // the replay clock keeps running; only the events it draws from are swapped
+  if (!same) { rebuild(); state.builtAt = Date.now(); } else refreshUi();     // the replay clock keeps running; only the events it draws from are swapped
 }
 
 // ----- overlays that follow things in the 3D view

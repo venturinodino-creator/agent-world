@@ -13,6 +13,7 @@ const httpsOr = (url, fallback) => (typeof url === 'string' && /^https:\/\//.tes
 
 // Why the button is disabled for an agent that cannot be started from here.
 function whyNot(agent) {
+  if (agent.kind === 'site') return 'A website is working while it answers: there is nothing to start.';
   if (agent.kind === 'human') return 'This is you: you work when you do.';
   if (agent.kind === 'builder') return agent.name === 'Auto-commit bot' ? 'The bot works by itself when its own schedule runs.' : 'Claude works when you open a session in this repo.';
   return 'This workflow cannot be started by hand from here.';

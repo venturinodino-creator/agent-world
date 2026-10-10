@@ -5,7 +5,7 @@ import { overview } from './overview.mjs';
 import { ago } from './panel.mjs';
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-const KIND = { workflow: 'action', builder: 'coding agent', human: 'you', local: 'cowork' };
+const KIND = { workflow: 'action', builder: 'coding agent', human: 'you', local: 'cowork', site: 'website' };
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 function verdictText(o) {

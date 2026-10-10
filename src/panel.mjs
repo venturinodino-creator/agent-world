@@ -13,9 +13,10 @@ const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls)
 const link = (text, url, cls) => { const a = el('a', cls, text); a.href = url; a.target = '_blank'; a.rel = 'noopener'; return a; };
 const safeUrl = u => (typeof u === 'string' && /^https:\/\//.test(u) ? u : null);
 
-const KIND_LABEL = { workflow: 'GitHub Action', builder: 'Coding agent', human: 'Human', local: 'Cowork · local agent' };
+const KIND_LABEL = { workflow: 'GitHub Action', builder: 'Coding agent', human: 'Human', local: 'Cowork · local agent', site: 'Website' };
 const STATUS_WORD = { running: 'Working', ok: 'Healthy', fail: 'Failed', idle: 'Idle', asleep: 'Scheduled' };
 const BAR = { running: 55, ok: 100, fail: 100, idle: 60, asleep: 0 };
+const SITE_WORD = { running: 'Live', fail: 'Down', idle: 'Checking…' };   // a website is working while it answers
 
 // actions: { focus } handlers for the buttons.
 export function renderPanel(root, agent, onClose, now = Date.now(), actions = {}) {
@@ -28,15 +29,15 @@ export function renderPanel(root, agent, onClose, now = Date.now(), actions = {}
   const top = el('div', 'cardtop');
   const face = el('div', 'avatar'); face.append(el('i'), el('i'));
   const titles = el('div', 'titles');
-  titles.append(el('h2', '', agent.name));
+  titles.append(el('h2', '', agent.kind === 'site' ? `${agent.island} website` : agent.name));
   const chips = el('div', 'chips'), chip = el('span', `chip ${agent.status}`);
-  chip.append(el('span', `dot ${agent.status}`), STATUS_WORD[agent.status] || agent.status);
+  chip.append(el('span', `dot ${agent.status}`), (agent.kind === 'site' ? SITE_WORD : STATUS_WORD)[agent.status] || agent.status);
   chips.append(chip, el('span', 'when', when));
   titles.append(chips);
   const x = el('button', 'x', '×'); x.setAttribute('aria-label', 'Close'); x.onclick = onClose;
   top.append(face, titles, x);
 
-  const bar = el('div', `bar ${agent.status}`); bar.append(el('i')); bar.firstChild.style.width = `${BAR[agent.status] ?? 0}%`;
+  const bar = el('div', `bar ${agent.status}`); bar.append(el('i')); bar.firstChild.style.width = `${agent.kind === 'site' && agent.status === 'running' ? 100 : BAR[agent.status] ?? 0}%`;
 
   // For the signed-in Admin, an agent that is not working gets an Activate button in place of the GitHub link
   // (see activation.mjs); everyone else keeps the plain Open link.
@@ -72,9 +73,13 @@ export function renderPanel(root, agent, onClose, now = Date.now(), actions = {}
   const sub = el('p', 'sub');
   sub.append(el('span', 'tag', KIND_LABEL[agent.kind] || agent.kind));
   if (agent.repo) sub.append('  in ', el('b', '', agent.repo));
+  else if (agent.kind === 'site' && safeUrl(agent.url)) { const u = new URL(agent.url); sub.append('  at ', el('b', '', u.host + (u.pathname === '/' ? '' : u.pathname))); }
   body.append(sub);
 
-  if (agent.kind === 'local') {
+  if (agent.kind === 'site') {
+    const grid = el('div', 'stats'); grid.append(stat(d.latest ? `${d.latest.ms} ms` : '—', 'answer time'), stat(d.latest ? ago(d.latest.date, now) : 'checking…', 'last checked'));
+    body.append(grid, el('p', 'note', 'This page can only see whether the website answers. It cannot tell a working page from an error page.'));
+  } else if (agent.kind === 'local') {
     if (d.role) body.append(el('p', 'role', d.role));
     const grid = el('div', 'stats'); grid.append(stat(d.schedule || '—', 'schedule'));
     body.append(grid, el('p', 'note', d.note));

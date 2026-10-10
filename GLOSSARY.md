@@ -5,7 +5,7 @@ A 3D pixel-toy world where the agents behind the owner's GitHub repos live and w
 ## Language
 
 **Agent**:
-Anything that does work for a repo and has a building and a little character in the world: a GitHub Actions workflow, Claude, the auto-commit bot, the owner, or a Cowork task.
+Anything that does work for a repo and has a building and a little character in the world: a GitHub Actions workflow, Claude, the auto-commit bot, the owner, a Cowork task, or a live website.
 _Avoid_: Bot, job, thread (the side panel says "threads", but they are agents)
 
 **Working**:
@@ -15,6 +15,10 @@ _Avoid_: Active, busy, live
 **Asleep**:
 How the world shows every agent that is not working, whatever it is waiting for (its next scheduled run, a request, nothing at all), and also one whose last run failed, which keeps a flashing "!" as well. Lying down at its building with a big "zzz" above its head. There is nothing in between: an astronaut is either at work or asleep, and never wanders about.
 _Avoid_: Inactive, disabled, idle, waiting
+
+**Website**:
+A live website the world watches, listed under `sites` in `src/config.mjs`: an island of its own with one agent, working while the site answers and failing when it does not. Only whether it answers is known, never what it says.
+_Avoid_: Repo, page, app
 
 **Plumbing**:
 A workflow that builds or checks a repo (a Pages deploy, a smoke check, CI) and does no job of its own. Listed in `skipWorkflows` in `src/config.mjs`; it gets no building and no astronaut.

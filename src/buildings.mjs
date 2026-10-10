@@ -263,6 +263,22 @@ function buildDish(status) {
   return finish(g, band, ring);
 }
 
+// A website: a low server hall with lit rack windows and a door, two roof fans, side vents and a mast with a dish.
+function buildSite(status) {
+  const g = new THREE.Group(), put = adder(g), { band, ring } = statusMats(status);
+  padOf(put, 0.5);
+  put(B(0.84, 0.32, 0.58), hull(), 0, 0.22, 0);
+  put(B(0.86, 0.04, 0.6), band, 0, 0.32, 0);
+  put(B(0.88, 0.05, 0.62), hullD(), 0, 0.4, 0);
+  for (const x of [-0.33, -0.21, 0.21, 0.33]) { put(B(0.09, 0.15, 0.02), darkM(), x, 0.21, 0.295); put(B(0.06, 0.12, 0.025), ring, x, 0.21, 0.3); }
+  doorway(put, ring, blueM(), 0, 0.15, 0.3, 0.12, 0.17); steps(put, 0, 0.38, 0.24);
+  for (const x of [-0.24, 0.24]) { put(C(0.1, 0.1, 0.04, 14), steel(), x, 0.45, 0.04); put(C(0.07, 0.07, 0.045, 14), darkM(), x, 0.455, 0.04); }
+  for (const sx of [-1, 1]) grille(put, sx * 0.43, 0.2, 0, sx * Math.PI / 2, 4);
+  put(C(0.014, 0.014, 0.46, 5), steel(), 0.3, 0.66, -0.16); put(new THREE.SphereGeometry(0.12, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), hull(), 0.3, 0.9, -0.16, [-0.9, 0, 0]);
+  antenna(put, -0.3, 0.42, -0.2, 0.22);
+  return finish(g, band, ring);
+}
+
 // The base on each island: a wide drum under a glass geodesic dome, an entrance block with a name plate, a glowing door and
 // steps, a connector tube each side and a dish on top. (Built so it stays inside its tile, whatever the scale.)
 export function buildBase(status, scale = 1) {
@@ -324,4 +340,5 @@ export const buildingFor = (agent, status, pick = 0, low = false) =>
   agent.kind === 'workflow' ? habitat(status, pick, low)
   : agent.kind === 'human' ? buildCabin(status)
   : agent.kind === 'local' ? buildDish(status)
+  : agent.kind === 'site' ? buildSite(status)
   : agent.name === 'Auto-commit bot' ? buildRover(status) : buildRocket(status);

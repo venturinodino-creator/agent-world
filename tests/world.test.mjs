@@ -95,6 +95,40 @@ test('an island carries the scale for how crowded it is', () => {
   assert.ok(world([repo('old', { pushed: iso(24 * 60) })], { localAgents: [] }, { showDormant: true }).islands.every(i => i.scale === 1));
 });
 
+const SITES = [{ name: 'NL CRM', url: 'https://x.dev/' }, { name: 'DK CRM', url: 'https://x.dev/dk/' }, { name: 'CRM landing', url: 'https://x.dev/landing' }];
+const probes = { 'https://x.dev/': { ok: true, ms: 120, at: '2026-10-02T11:59:00.000Z' }, 'https://x.dev/dk/': { ok: false, ms: 8000, at: '2026-10-02T11:59:00.000Z' } };
+
+test('every website in the config is an island of its own with one website agent', () => {
+  const w = world([], { localAgents: [], sites: SITES }, { probes });
+  assert.deepEqual(w.islands.map(i => i.name), ['NL CRM', 'DK CRM', 'CRM landing']);
+  assert.ok(w.islands.every(i => i.agentCount === 1 && !i.dormant && i.repo === null && i.scale === 1));
+  assert.deepEqual(w.agents.map(a => [a.island, a.kind, a.name, a.url]),
+    SITES.map(s => [s.name, 'site', 'Website', s.url]));
+  assert.equal(new Set(w.agents.map(a => a.id)).size, 3, 'ids are unique');
+  assert.ok(w.agents.every(a => a.pos && Number.isFinite(a.pos.x)));
+});
+
+test('a website is working while it answers, failing when it does not and asleep until it has been checked', () => {
+  const w = world([], { localAgents: [], sites: SITES }, { probes });
+  const st = Object.fromEntries(w.agents.map(a => [a.island, a.status]));
+  assert.deepEqual(st, { 'NL CRM': 'running', 'DK CRM': 'fail', 'CRM landing': 'idle' });
+  const h = Object.fromEntries(w.islands.map(i => [i.name, i.health]));
+  assert.deepEqual(h, { 'NL CRM': 'running', 'DK CRM': 'fail', 'CRM landing': 'idle' });
+  const nl = w.agents.find(a => a.island === 'NL CRM');
+  assert.deepEqual(nl.details.latest, { date: '2026-10-02T11:59:00.000Z', ms: 120, result: 'answers' });
+  assert.equal(w.agents.find(a => a.island === 'CRM landing').details.latest, null);
+  assert.deepEqual(w.events, [], 'a check is not an event in the replay');
+});
+
+test('websites sit beside the repos and the lobby without disturbing them', () => {
+  const config = { localAgents: [{ name: 'Watcher', repo: null, schedule: 'Daily', status: 'scheduled' }], sites: SITES };
+  const w = world([repo('a', { workflows: [wf('Scan')] })], config, { probes });
+  assert.deepEqual(w.islands.map(i => i.name), ['a', 'Lobby', 'NL CRM', 'DK CRM', 'CRM landing']);
+  assert.deepEqual(agentsIn(w, 'a').map(x => x.name), ['Scan']);
+  assert.equal(new Set(w.islands.map(i => i.design)).size, 5, 'five neighbouring islands, five designs');
+  assert.deepEqual(world([repo('a')], { localAgents: [] }).islands.map(i => i.name), ['a'], 'no sites configured, none shown');
+});
+
 test('workflow status comes from its latest run', () => {
   const w = world([repo('a', { workflows: [
     wf('running', { status: 'in_progress', concl: null }), wf('failing', { concl: 'failure' }),

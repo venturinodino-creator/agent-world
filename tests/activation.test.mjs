@@ -54,6 +54,16 @@ test('agents that cannot be started from here get a disabled Work button that sa
   assert.deepEqual(STARTABLE_REPOS.slice().sort(), ['african-earth-energy-crm', 'belgium-crm', 'denmark-crm', 'netherlands-crm']);
 });
 
+test('a website has nothing to start: no button while it answers, a disabled one that says why when it is down', () => {
+  const site = status => ({ id: 'NL CRM::Website', name: 'Website', kind: 'site', status, repo: null, url: 'https://x.dev/' });
+  for (const admin of [false, true]) {
+    assert.equal(offerFor(site('running'), { admin }), null);
+    const o = offerFor(site('fail'), { admin });
+    assert.deepEqual([o.kind, o.label], ['manual', 'Work']);
+    assert.match(o.note, /website/i);
+  }
+});
+
 test('while a request is pending the button is replaced by its progress', () => {
   const req = newRequest(flow('ok'), NOW);
   const o = offerFor(flow('running'), { admin: true, request: req, phase: 'requested' });
