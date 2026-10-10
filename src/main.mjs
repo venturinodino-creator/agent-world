@@ -133,12 +133,22 @@ function selectIsland(name) {
 }
 function clearSelection() { state.selectedAgent = null; refreshUi(); }
 
-async function refresh() {
-  // the data and the websites are asked at the same time, so the first picture already knows which sites are up
-  const [data, probes] = await Promise.all([loadData(), probeAll(CONFIG.sites || [])]);
+// What the websites answered: a fresh answer time goes onto the cards without rebuilding the world, and the world is only
+// rebuilt when a site goes up or down. An offline browser says nothing about the sites, so it changes nothing.
+function applyProbes(probes) {
+  if (navigator.onLine === false) return;
   const flipped = siteSignature(probes) !== siteSignature(state.probes);
   state.probes = probes;
-  for (const a of state.world?.agents || []) if (a.kind === 'site') a.details = { ...a.details, latest: siteLatest(probes[a.url]) };   // a fresh answer time without rebuilding the world
+  for (const a of state.world?.agents || []) if (a.kind === 'site') a.details = { ...a.details, latest: siteLatest(probes[a.url]) };
+  if (flipped && state.data) { rebuild(); state.builtAt = Date.now(); } else if (state.world) refreshUi();
+}
+
+async function refresh() {
+  // The sites are asked while the data loads, but a site that hangs must never hold the picture up: the first picture waits
+  // for them a moment so it already knows which are up, and a late answer is applied when it arrives.
+  const probing = probeAll(CONFIG.sites || []).then(applyProbes);
+  const data = await loadData();
+  await Promise.race([probing, new Promise(r => setTimeout(r, 1500))]);
   if (!data) {
     message(state.data ? 'Could not refresh the data, showing the last copy.' : 'Could not load the data, so the world is empty. Check your connection and reload.');
     return;
@@ -146,7 +156,7 @@ async function refresh() {
   // The data only changes about once an hour, so most five-minute refreshes find the same snapshot. Rebuilding the
   // whole 3D world for nothing costs a visible hitch, so it is only redone for new data or when the clock-based
   // statuses (a committer counts as working for 30 minutes) may have moved on.
-  const same = !flipped && state.data && data.generatedAt && data.generatedAt === state.data.generatedAt && Date.now() - state.builtAt < 15 * 60e3;
+  const same = state.data && data.generatedAt && data.generatedAt === state.data.generatedAt && Date.now() - state.builtAt < 15 * 60e3;
   message(''); state.data = data;
   if (!same) { rebuild(); state.builtAt = Date.now(); } else refreshUi();     // the replay clock keeps running; only the events it draws from are swapped
 }
